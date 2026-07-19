@@ -225,16 +225,55 @@ class NavidromeLibrary:
 
     # ── sync / download ──────────────────────────────────────────────────────
 
-    def sync(self, progress_callback=None, is_cancelled=None) -> None:
-        """Download all tracks from Navidrome that aren't already cached."""
+    def get_song_metadata(self, song_id: str) -> dict[str, Any] | None:
+        """Fetch metadata for a single song by ID."""
+        try:
+            return self.client.get_song(song_id)
+        except Exception:
+            logger.exception(f"Failed to fetch metadata for song {song_id}")
+            return None
+
+    def get_all_cached_songs(self) -> list[str]:
+        """Return a list of filenames (with extensions) of all cached songs."""
+        try:
+            return [f for f in os.listdir(self.cache_dir) if os.path.isfile(os.path.join(self.cache_dir, f))]
+        except OSError:
+            return []
+
+    def _resolve_songs(
+        self,
+        song_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Resolve song metadata: all songs (if ids is None) or only the given IDs."""
+        if song_ids is not None:
+            songs: list[dict[str, Any]] = []
+            for sid in song_ids:
+                meta = self.get_song_metadata(sid)
+                if meta:
+                    songs.append(meta)
+            return songs
+        return self.get_all_songs()
+
+    def sync(
+        self,
+        progress_callback=None,
+        is_cancelled=None,
+        song_ids: list[str] | None = None,
+    ) -> None:
+        """Download tracks from Navidrome that aren't already cached.
+
+        If *song_ids* is provided, only those tracks are downloaded.
+        Otherwise every track in the library is downloaded (existing behaviour).
+        """
         os.makedirs(self.cache_dir, exist_ok=True)
-        songs = self.get_all_songs()
+        songs = self._resolve_songs(song_ids)
         if not songs:
             logger.warning("NavidromeLibrary: no songs returned from API")
             return
 
         total = len(songs)
-        logger.info("NavidromeLibrary: syncing %d song(s) to %s", total, self.cache_dir)
+        label = f"{total} selected track(s)" if song_ids else f"{total} song(s)"
+        logger.info("NavidromeLibrary: syncing %s to %s", label, self.cache_dir)
         downloaded = skipped = failed = 0
 
         for i, song in enumerate(songs):

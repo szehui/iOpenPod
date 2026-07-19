@@ -1994,6 +1994,11 @@ class SettingsPage(QWidget):
             resolve_default_fn=default_navidrome_cache_dir,
         )
 
+        self.browse_library_btn = QPushButton("Browse Library...")
+        self.browse_library_btn.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        self.browse_library_btn.setStyleSheet(button_css("secondary", "sm"))
+        self.browse_library_btn.clicked.connect(self._on_browse_library_clicked)
+
         return self._make_page(
             "Navidrome",
             "Connection",
@@ -2004,6 +2009,7 @@ class SettingsPage(QWidget):
             "Storage",
             _SettingsCard(
                 self.navidrome_cache_dir,
+                self.browse_library_btn,
             ),
         )
 
@@ -3598,3 +3604,10 @@ class SettingsPage(QWidget):
             return
 
         self.navidrome_creds_row.set_connected(url, username)
+
+    def _on_browse_library_clicked(self) -> None:
+        """Open the Navidrome library browser dialog."""
+        from iopenpod.gui.widgets.navidromeBrowseDialog import NavidromeBrowseDialog
+
+        dialog = NavidromeBrowseDialog(self._settings_service, self)
+        dialog.exec()

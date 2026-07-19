@@ -1161,6 +1161,7 @@ class SyncDiffRequest:
     navidrome_username: str = ""
     navidrome_password: str = ""
     navidrome_cache_dir: str = ""
+    navidrome_selected_ids: list[str] | None = None
 
 
 class SyncDiffWorker(QThread):
@@ -1202,15 +1203,19 @@ class SyncDiffWorker(QThread):
             navidrome_user = getattr(request, "navidrome_username", "").strip()
             navidrome_pass = getattr(request, "navidrome_password", "")
             navidrome_cache = getattr(request, "navidrome_cache_dir", "").strip()
+            navidrome_selected = getattr(request, "navidrome_selected_ids", None)
             if navidrome_url and navidrome_user and navidrome_pass and navidrome_cache:
                 self.progress.emit("navidrome_sync", 0, 0, "Starting Navidrome sync...")
                 try:
                     lib = NavidromeLibrary(navidrome_url, navidrome_user, navidrome_pass, navidrome_cache)
                     # wrap progress to emit via worker
                     def navidrome_progress(current, total, message):
-                        # total may be unknown (0); we map to indeterminate by sending total=0
                         self.progress.emit("navidrome_sync", current, total, message or "")
-                    lib.sync(progress_callback=navidrome_progress, is_cancelled=lambda: self.isInterruptionRequested())
+                    lib.sync(
+                        progress_callback=navidrome_progress,
+                        is_cancelled=lambda: self.isInterruptionRequested(),
+                        song_ids=navidrome_selected,
+                    )
                     logger.info("Navidrome library synced to %s", navidrome_cache)
                 except Exception:
                     logger.exception("Failed to sync Navidrome library; continuing without it")
