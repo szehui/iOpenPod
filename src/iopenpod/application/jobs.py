@@ -1157,6 +1157,10 @@ class SyncDiffRequest:
     fpcalc_path: str = ""
     photo_sync_settings: dict[str, bool] | None = None
     transcode_options: Any = None
+    navidrome_url: str = ""
+    navidrome_username: str = ""
+    navidrome_password: str = ""
+    navidrome_cache_dir: str = ""
 
 
 class SyncDiffWorker(QThread):
@@ -1189,8 +1193,31 @@ class SyncDiffWorker(QThread):
                 EngineRequest,
                 SyncEngine,
             )
+            from iopenpod.sync.navidrome_library import NavidromeLibrary
 
             request = self._request
+
+            # Navidrome sync if configured
+            navidrome_url = getattr(request, "navidrome_url", "").strip()
+            navidrome_user = getattr(request, "navidrome_username", "").strip()
+            navidrome_pass = getattr(request, "navidrome_password", "")
+            navidrome_cache = getattr(request, "navidrome_cache_dir", "").strip()
+            if navidrome_url and navidrome_user and navidrome_pass and navidrome_cache:
+                self.progress.emit("navidrome_sync", 0, 0, "Starting Navidrome sync...")
+                try:
+                    lib = NavidromeLibrary(navidrome_url, navidrome_user, navidrome_pass, navidrome_cache)
+                    # wrap progress to emit via worker
+                    def navidrome_progress(current, total, message):
+                        # total may be unknown (0); we map to indeterminate by sending total=0
+                        self.progress.emit("navidrome_sync", current, total, message or "")
+                    lib.sync(progress_callback=navidrome_progress)
+                    logger.info("Navidrome library synced to %s", navidrome_cache)
+                except Exception:
+                    logger.exception("Failed to sync Navidrome library; continuing without it")
+                    self.error.emit("Navidrome sync failed; continuing without it")
+            else:
+                # Emit a neutral progress step so UI doesn't hang at 0%
+                self.progress.emit("navidrome_sync", 0, 0, "Skipping Navidrome sync (not configured)")
 
             def on_engine_progress(progress) -> None:
                 legacy = progress.legacy_event

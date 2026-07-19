@@ -190,6 +190,7 @@ class _PCLibScanWorker(QThread):
         include_video: bool = True,
         include_photo: bool = True,
         max_workers: int | None = None,
+        navidrome_config: dict | None = None,
     ):
         super().__init__()
         self._folder_entries = _normalize_folder_entries(folders)
@@ -198,6 +199,7 @@ class _PCLibScanWorker(QThread):
         self._include_photo = include_photo
         self._max_workers = max_workers
         self._cancel_event = threading.Event()
+        self._navidrome_config = navidrome_config or {}
 
     def cancel(self) -> None:
         self._cancel_event.set()
@@ -207,6 +209,24 @@ class _PCLibScanWorker(QThread):
 
     def run(self):
         try:
+            # Navidrome sync if configured
+            nd = self._navidrome_config
+            if nd.get("url") and nd.get("username") and nd.get("password") and nd.get("cache_dir"):
+                self.progress.emit("navidrome_sync", 0, 0, "Starting Navidrome sync...")
+                try:
+                    from iopenpod.sync.navidrome_library import NavidromeLibrary
+                    lib = NavidromeLibrary(nd["url"], nd["username"], nd["password"], nd["cache_dir"])
+                    def navidrome_progress(current, total, message):
+                        self.progress.emit("navidrome_sync", current, total, message or "")
+                    lib.sync(progress_callback=navidrome_progress)
+                    log.info("Navidrome synced for selective scan: %s", nd["cache_dir"])
+                except Exception as exc:
+                    log.exception("Navidrome sync failed during selective scan")
+                    self.error.emit(f"Navidrome sync failed: {exc}")
+                    return
+            else:
+                self.progress.emit("navidrome_sync", 0, 0, "Skipping Navidrome sync (not configured)")
+
             from iopenpod.sync.pc_library import PCLibrary
             log.debug("PCLibScanWorker scanning folders: %s", self._folders)
             lib = PCLibrary(self._folder_entries)
@@ -2513,7 +2533,8 @@ class SelectiveSyncBrowser(QWidget):
             scan_workers = 0
         scan_workers = scan_workers or None
 
-        # If user explicitly added Navidrome Library as a folder, sync it now
+        # Build navidrome config for the background worker (if cache dir is in folder list)
+        navidrome_config: dict = {}
         navidrome_cache_path = os.path.abspath(
             os.path.join(default_data_dir(), "navidrome-cache")
         )
@@ -2521,19 +2542,16 @@ class SelectiveSyncBrowser(QWidget):
             _path_matches_navidrome_cache(f, navidrome_cache_path)
             for f in self._folder_entries
         ):
-            settings = self._settings_service.get_effective_settings()
             nd_url = getattr(settings, "navidrome_url", "").strip()
             nd_user = getattr(settings, "navidrome_username", "").strip()
             nd_pass = getattr(settings, "navidrome_password", "")
             if nd_url and nd_user and nd_pass:
-                try:
-                    from iopenpod.sync.navidrome_library import NavidromeLibrary
-
-                    nd_lib = NavidromeLibrary(nd_url, nd_user, nd_pass, navidrome_cache_path)
-                    nd_lib.sync()
-                    log.info("Navidrome synced for selective scan: %s", navidrome_cache_path)
-                except Exception:
-                    log.exception("Failed to sync Navidrome library for selective scan")
+                navidrome_config = {
+                    "url": nd_url,
+                    "username": nd_user,
+                    "password": nd_pass,
+                    "cache_dir": navidrome_cache_path,
+                }
             else:
                 log.warning(
                     "Navidrome cache dir is in folder list but credentials not configured "
@@ -2545,6 +2563,7 @@ class SelectiveSyncBrowser(QWidget):
             include_video=self._device_supports_video,
             include_photo=self._device_supports_photo,
             max_workers=scan_workers,
+            navidrome_config=navidrome_config,
         )
         worker = self._scan_worker
         worker.finished.connect(

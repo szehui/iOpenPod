@@ -321,22 +321,19 @@ class SyncSessionController(QObject):
 
         pc_folders = list(folder_entries)  # start with configured PC folders
 
-        # Navidrome: only sync if user explicitly added the cache to their folder list
+        # Navidrome: check if cache dir is in folder list; stash config for the worker thread
         navidrome_cache = os.path.abspath(os.path.join(default_data_dir(), "navidrome-cache"))
+        navidrome_url = ""
+        navidrome_username = ""
+        navidrome_password = ""
         if any(_dir_matches(f, navidrome_cache) for f in pc_folders):
-            settings = self._settings_service.get_effective_settings()
             nd_url = getattr(settings, "navidrome_url", "").strip()
             nd_user = getattr(settings, "navidrome_username", "").strip()
             nd_pass = getattr(settings, "navidrome_password", "")
             if nd_url and nd_user and nd_pass:
-                try:
-                    from iopenpod.sync.navidrome_library import NavidromeLibrary
-
-                    lib = NavidromeLibrary(nd_url, nd_user, nd_pass, navidrome_cache)
-                    lib.sync()
-                    logger.info("Navidrome library synced to %s", navidrome_cache)
-                except Exception:
-                    logger.exception("Failed to sync Navidrome library; skipping")
+                navidrome_url = nd_url
+                navidrome_username = nd_user
+                navidrome_password = nd_pass
             else:
                 logger.warning(
                     "Navidrome cache in folder list but credentials missing — "
@@ -396,6 +393,10 @@ class SyncSessionController(QObject):
             transcode_options=build_transcode_options(settings),
             allowed_paths=allowed_paths,
             selected_playlist_paths=selected_playlist_paths,
+            navidrome_url=navidrome_url,
+            navidrome_username=navidrome_username,
+            navidrome_password=navidrome_password,
+            navidrome_cache_dir=navidrome_cache,
         )
 
     def _on_planning_finished(self, plan: Any, worker: Any) -> None:
