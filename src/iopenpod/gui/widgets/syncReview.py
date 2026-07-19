@@ -3705,7 +3705,6 @@ class PCFolderDialog(QDialog):
         self._sync_available = bool(sync_available)
         self._navidrome_available = navidrome_available
         self._navidrome_cache_dir = navidrome_cache_dir
-        self._navidrome_enabled = self._check_navidrome_in_folders()
         self.setWindowTitle(
             "Select Media Folders" if self._sync_available else "Media Folders"
         )
@@ -3716,6 +3715,7 @@ class PCFolderDialog(QDialog):
         self.sync_mode = ""  # "full" | "selective" | "back_sync"
         self.last_folders = self._normalize_folders(last_folder)
         self._folders = list(self.last_folders)
+        self._navidrome_enabled = self._check_navidrome_in_folders()
         self._expanded_folder_keys: set[str] = set()
         self._sync_action_buttons: list[QPushButton] = []
 
