@@ -19,8 +19,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
-from iopenpod.infrastructure.settings_paths import default_data_dir
-
 from PIL import Image, ImageOps
 from PyQt6.QtCore import QPoint, QSize, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QCursor, QFont, QImage, QPixmap

@@ -39,7 +39,6 @@ from iopenpod.application.device_identity import (
     refresh_device_disk_usage,
     resolve_device_image_filename,
 )
-from iopenpod.infrastructure.settings_paths import default_data_dir
 from iopenpod.device.recovery import (
     LinuxFilesystemRecoveryPlan,
     linux_filesystem_recovery_plan,

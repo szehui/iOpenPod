@@ -276,7 +276,7 @@ class NavidromeLibrary:
         logger.info("NavidromeLibrary: syncing %s to %s", label, self.cache_dir)
         downloaded = skipped = failed = 0
 
-        for i, song in enumerate(songs):
+        for _i, song in enumerate(songs):
             if is_cancelled and is_cancelled():
                 break
 

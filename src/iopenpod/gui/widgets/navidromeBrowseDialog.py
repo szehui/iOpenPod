@@ -458,7 +458,7 @@ class NavidromeBrowseDialog(QDialog):
             s.navidrome_selected_ids = json.dumps(list(self._selected_ids))
             self._settings_service.save_global_settings(s)
             self.accept()
-        except Exception as exc:
+        except Exception:
             logger.exception("Failed to save Navidrome selection")
             # Still accept — the user picked; we logged the error
             self.accept()

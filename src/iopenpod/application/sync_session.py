@@ -15,7 +15,6 @@ from iopenpod.infrastructure.media_folders import (
     media_folder_entries_to_settings,
     media_folder_paths,
 )
-from iopenpod.infrastructure.settings_paths import default_data_dir
 
 from .jobs import (
     PodcastPlanRequest,

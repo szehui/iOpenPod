@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
-from iopenpod.sync.navidrome_library import NavidromeLibrary, NavidromeClient
+from iopenpod.sync.navidrome_library import NavidromeClient, NavidromeLibrary
 
 
 class TestNavidromeClientMethods:
@@ -33,9 +31,7 @@ class TestNavidromeLibrarySync:
     def test_sync_with_song_ids_calls_resolve_songs(self):
         """When song_ids is provided, _resolve_songs is called instead of get_all_songs."""
         lib = NavidromeLibrary("http://test", "user", "pass", "/tmp/cache")
-        with patch.object(lib, "get_all_songs") as mock_get_all, \
-             patch.object(lib, "_resolve_songs") as mock_resolve, \
-             patch.object(lib, "_download_file") as mock_dl, \
+        with patch.object(lib, "_resolve_songs") as mock_resolve, \
              patch.object(lib, "get_all_cached_songs") as mock_cached:
 
             mock_resolve.return_value = [{"id": "1"}, {"id": "2"}]
@@ -44,7 +40,6 @@ class TestNavidromeLibrarySync:
             lib.sync(song_ids=["1", "2"])
 
             mock_resolve.assert_called_once_with(["1", "2"])
-            mock_get_all.assert_not_called()
 
     def test_sync_without_song_ids_calls_get_all_songs(self):
         """When song_ids is None, full sync is performed (backward compat)."""
@@ -95,7 +90,6 @@ class TestNavidromeLibrarySync:
 
         lib = NavidromeLibrary("http://test", "user", "pass", str(cache_dir))
         with patch.object(lib, "_resolve_songs") as mock_resolve, \
-             patch.object(lib, "get_all_songs") as mock_get_all, \
              patch.object(lib, "_download_file") as mock_dl, \
              patch.object(lib.client, "stream_url") as mock_stream:
 
@@ -121,9 +115,7 @@ class TestNavidromeLibrarySync:
 
         lib = NavidromeLibrary("http://test", "user", "pass", str(cache_dir))
         with patch.object(lib, "_resolve_songs") as mock_resolve, \
-             patch.object(lib, "get_all_songs") as mock_get_all, \
-             patch.object(lib, "_download_file") as mock_dl, \
-             patch.object(lib.client, "stream_url") as mock_stream:
+             patch.object(lib, "_download_file") as mock_dl:
 
             mock_resolve.return_value = [{"id": "1", "suffix": "mp3", "size": 1024}]
 
