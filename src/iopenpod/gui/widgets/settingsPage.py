@@ -1972,11 +1972,11 @@ class SettingsPage(QWidget):
             "Navidrome / Subsonic",
             "Enter your Navidrome server URL, username, and password to sync your music library.",
         )
-        self.navidrome_creds_row.credentials_changed.connect(self._on_navidrome_credentials_changed)
-
+        self.navidrome_creds_row.credentials_changed.connect(
+            self._on_navidrome_credentials_changed
+        )
         self.navidrome_status_label = QLabel("")
         self.navidrome_status_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
-        self.navidrome_status_label.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
         self.navidrome_status_label.setStyleSheet(f"""
             color: {Colors.TEXT_SECONDARY};
             background: transparent;
@@ -1984,12 +1984,14 @@ class SettingsPage(QWidget):
             padding: 12px;
         """)
 
-        card = _SettingsCard(
-            self.navidrome_creds_row,
-            self.navidrome_status_label,
+        return self._make_page(
+            "Navidrome",
+            "Connection",
+            _SettingsCard(
+                self.navidrome_creds_row,
+                self.navidrome_status_label,
+            ),
         )
-
-        return self._wrap_in_scroll(card)
 
     def _build_storage_page(self) -> QScrollArea:
         from iopenpod.infrastructure.settings_paths import default_cache_dir
