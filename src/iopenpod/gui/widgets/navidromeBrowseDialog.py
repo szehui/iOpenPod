@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPalette
@@ -242,6 +243,10 @@ class NavidromeBrowseDialog(QDialog):
             tracks = album.get("_tracks", [])
             total_seconds = sum(t.get("duration", 0) for t in tracks)
             album["_total_duration"] = total_seconds
+
+        # Pre-select tracks that are already cached on the iPod
+        self._preselect_cached_tracks()
+
         self._loading_label.setVisible(False)
         self._table.setVisible(True)
         self._rebuild_table()
@@ -249,6 +254,41 @@ class NavidromeBrowseDialog(QDialog):
     def _on_load_error(self, error: str) -> None:
         self._loading_label.setText(f"Error loading albums: {error}")
         self._loading_label.setStyleSheet(f"color: {Colors.DANGER}; padding: 32px;")
+
+    def _preselect_cached_tracks(self) -> None:
+        """Pre-select tracks that already exist in the local cache directory.
+
+        Scans the Navidrome cache folder for files named {song_id}.{suffix}
+        and adds those song IDs to the selected set. This ensures albums that
+        are already on the iPod appear pre-selected in the browse dialog.
+        """
+        s = self._settings_service.get_global_settings()
+        from iopenpod.infrastructure.settings_paths import default_navidrome_cache_dir
+        cache_dir = s.navidrome_cache_dir.strip() or default_navidrome_cache_dir()
+        if not os.path.isdir(cache_dir):
+            return
+
+        try:
+            cached = set()
+            for fname in os.listdir(cache_dir):
+                fpath = os.path.join(cache_dir, fname)
+                if not os.path.isfile(fpath):
+                    continue
+                # Cached filenames are {song_id}.{suffix}
+                stem, _ = os.path.splitext(fname)
+                if stem:
+                    cached.add(stem)
+            # Build a set of all available track IDs so we only match known tracks
+            all_track_ids = set()
+            for album in self._albums:
+                for track in album.get("_tracks", []):
+                    tid = track.get("id")
+                    if tid:
+                        all_track_ids.add(tid)
+            # Pre-select any cached track that also exists in the loaded library
+            self._selected_ids.update(cached & all_track_ids)
+        except (OSError, PermissionError):
+            logger.warning("Could not scan Navidrome cache dir for pre-selection", exc_info=True)
 
     def _rebuild_table(self, filter_text: str = "") -> None:
         """Populate the table with albums and optionally their tracks."""
