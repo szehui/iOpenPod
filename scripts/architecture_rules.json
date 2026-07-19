@@ -1,14 +1,34 @@
 {
   "allowed_gui_public_imports": [
     "iopenpod.sync.contracts",
-    "iopenpod.sync.review_selection"
+    "iopenpod.sync.review_selection",
+    "iopenpod.sync.navidrome_library"
   ],
   "allowed_gui_forbidden_imports": {
-    "src/iopenpod/gui/app.py": ["iopenpod.sync.album_chapters"],
-    "src/iopenpod/gui/widgets/MBListView.py": ["iopenpod.sync._playlist_builder"],
+    "src/iopenpod/gui/app.py": [
+      "iopenpod.sync.album_chapters",
+      "iopenpod.device",
+      "iopenpod.device.recovery",
+      "iopenpod.sync.ipod_track_paths"
+    ],
+    "src/iopenpod/gui/imgMaker.py": ["iopenpod.device.artwork_presets"],
+    "src/iopenpod/gui/widgets/MBListView.py": [
+      "iopenpod.sync._playlist_builder",
+      "iopenpod.sync.ipod_track_paths"
+    ],
     "src/iopenpod/gui/widgets/devicePicker.py": ["iopenpod.device"],
     "src/iopenpod/gui/widgets/musicBrowser.py": ["iopenpod.sync.album_chapters", "iopenpod.device"],
-    "src/iopenpod/gui/widgets/photoBrowser.py": ["iopenpod.sync.photos", "iopenpod.device.artwork"],
+    "src/iopenpod/gui/widgets/navidromeBrowseDialog.py": ["iopenpod.sync.navidrome_library"],
+    "src/iopenpod/gui/widgets/photoBrowser.py": [
+      "iopenpod.sync.photos",
+      "iopenpod.device.artwork",
+      "iopenpod.device.durability",
+      "iopenpod.device.filesystem_profile",
+      "iopenpod.device.write_guard",
+      "iopenpod.device.write_readiness",
+      "iopenpod.sync"
+    ],
+    "src/iopenpod/gui/widgets/playlistBrowser.py": ["iopenpod.sync.ipod_track_paths"],
     "src/iopenpod/gui/widgets/podcastBrowser.py": [
       "iopenpod.podcasts.artwork",
       "iopenpod.podcasts.feed_parser",
@@ -25,7 +45,8 @@
       "iopenpod.sync.pc_library",
       "iopenpod.sync.photos",
       "iopenpod.sync.sync_playlist_files",
-      "iopenpod.sync.unknown_metadata"
+      "iopenpod.sync.unknown_metadata",
+      "iopenpod.sync.navidrome_library"
     ],
     "src/iopenpod/gui/widgets/settingsPage.py": [
       "iopenpod.sync.audio_fingerprint",
@@ -33,17 +54,26 @@
       "iopenpod.sync.lb_scrobbler",
       "iopenpod.sync.transcode_cache",
       "iopenpod.sync.transcoder",
+      "iopenpod.sync.navidrome_library",
       "iopenpod.device"
-    ]
+    ],
+    "src/iopenpod/gui/widgets/trackContextMenu.py": ["iopenpod.sync.album_chapters"]
   },
   "allowed_import_cycles": [
     [
       "iopenpod.device.authority",
+      "iopenpod.device.bootstrap",
+      "iopenpod.device.durability",
       "iopenpod.device.info",
+      "iopenpod.device.metadata_write",
       "iopenpod.device.scanner",
+      "iopenpod.device.storage_safety",
       "iopenpod.device.virtual",
       "iopenpod.device.vpd_libusb",
-      "iopenpod.device.vpd_linux"
+      "iopenpod.device.vpd_linux",
+      "iopenpod.device.write_guard",
+      "iopenpod.device.write_readiness",
+      "iopenpod.itunesdb_writer.hash72"
     ],
     [
       "iopenpod.artworkdb_parser.chunk_parser",
@@ -63,21 +93,28 @@
       "iopenpod.itunesdb_parser.mhit_parser",
       "iopenpod.itunesdb_parser.mhsd_parser",
       "iopenpod.itunesdb_parser.mhyp_parser"
+    ],
+    [
+      "iopenpod.sync._db_io",
+      "iopenpod.sync.database_commit"
     ]
   ],
   "allowed_runtime_singleton_access": {},
   "allowed_except_exception_pass_counts": {
+    "src/iopenpod/application/sync_session.py": 1,
     "src/iopenpod/artworkdb_writer/art_extractor.py": 3,
-    "src/iopenpod/gui/app.py": 2,
+    "src/iopenpod/gui/app.py": 3,
     "src/iopenpod/gui/hidpi.py": 4,
     "src/iopenpod/gui/styles.py": 2,
     "src/iopenpod/gui/widgets/MBListView.py": 5,
     "src/iopenpod/gui/widgets/backupBrowser.py": 1,
+    "src/iopenpod/gui/widgets/devicePicker.py": 1,
     "src/iopenpod/gui/widgets/musicBrowser.py": 2,
+    "src/iopenpod/gui/widgets/photoBrowser.py": 1,
     "src/iopenpod/gui/widgets/playlistBrowser.py": 7,
     "src/iopenpod/gui/widgets/podcastBrowser.py": 4,
     "src/iopenpod/gui/widgets/pooledCardGrid.py": 2,
-    "src/iopenpod/gui/widgets/selectiveSyncBrowser.py": 2,
+    "src/iopenpod/gui/widgets/selectiveSyncBrowser.py": 3,
     "src/iopenpod/gui/widgets/settingsPage.py": 5,
     "src/iopenpod/gui/widgets/sidebar.py": 1,
     "src/iopenpod/gui/widgets/syncReview.py": 1,
