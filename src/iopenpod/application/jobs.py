@@ -1210,7 +1210,7 @@ class SyncDiffWorker(QThread):
                     def navidrome_progress(current, total, message):
                         # total may be unknown (0); we map to indeterminate by sending total=0
                         self.progress.emit("navidrome_sync", current, total, message or "")
-                    lib.sync(progress_callback=navidrome_progress)
+                    lib.sync(progress_callback=navidrome_progress, is_cancelled=lambda: self.isInterruptionRequested())
                     logger.info("Navidrome library synced to %s", navidrome_cache)
                 except Exception:
                     logger.exception("Failed to sync Navidrome library; continuing without it")

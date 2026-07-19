@@ -225,7 +225,7 @@ class NavidromeLibrary:
 
     # ── sync / download ──────────────────────────────────────────────────────
 
-    def sync(self, progress_callback=None) -> None:
+    def sync(self, progress_callback=None, is_cancelled=None) -> None:
         """Download all tracks from Navidrome that aren't already cached."""
         os.makedirs(self.cache_dir, exist_ok=True)
         songs = self.get_all_songs()
@@ -238,7 +238,7 @@ class NavidromeLibrary:
         downloaded = skipped = failed = 0
 
         for i, song in enumerate(songs):
-            if self._cancelled:
+            if is_cancelled and is_cancelled():
                 break
 
             sid = song.get("id")
