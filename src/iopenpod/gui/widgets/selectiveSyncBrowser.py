@@ -9,6 +9,7 @@ unchecks individual tracks, then submits only the selected paths for sync.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
@@ -216,7 +217,10 @@ class _PCLibScanWorker(QThread):
                     lib = NavidromeLibrary(nd["url"], nd["username"], nd["password"], nd["cache_dir"])
                     def navidrome_progress(current, total, message):
                         self.progress.emit("navidrome_sync", current, total, message or "")
-                    lib.sync(progress_callback=navidrome_progress)
+                    lib.sync(
+                        progress_callback=navidrome_progress,
+                        song_ids=nd.get("song_ids"),
+                    )
                     log.info("Navidrome synced for selective scan: %s", nd["cache_dir"])
                 except Exception as exc:
                     log.exception("Navidrome sync failed during selective scan")
@@ -2544,11 +2548,13 @@ class SelectiveSyncBrowser(QWidget):
             nd_user = getattr(settings, "navidrome_username", "").strip()
             nd_pass = getattr(settings, "navidrome_password", "")
             if nd_url and nd_user and nd_pass:
+                nd_selected = getattr(settings, "navidrome_selected_ids", "")
                 navidrome_config = {
                     "url": nd_url,
                     "username": nd_user,
                     "password": nd_pass,
                     "cache_dir": navidrome_cache_path,
+                    "song_ids": json.loads(nd_selected) if nd_selected and nd_selected.strip() else None,
                 }
             else:
                 log.warning(
