@@ -254,7 +254,14 @@ class NavidromeBrowseDialog(QDialog):
         self._loader_thread.start()
 
     def _on_albums_loaded(self, albums: list[dict]) -> None:
-        self._albums = albums
+        # Sort albums by artist (case-insensitive), then by album title
+        self._albums = sorted(
+            albums,
+            key=lambda a: (
+                a.get("artist", "").lower(),
+                a.get("name", a.get("title", "")).lower(),
+            ),
+        )
 
         # Pre-select tracks that are already cached on the iPod
         self._preselect_cached_tracks()
