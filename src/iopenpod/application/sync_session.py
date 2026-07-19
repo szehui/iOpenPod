@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, cast
@@ -297,9 +298,32 @@ class SyncSessionController(QObject):
 
     def _build_diff_request(self, intent: SyncPlanningIntent, settings: Any) -> SyncDiffRequest:
         folder_entries = tuple(media_folder_entries_to_settings(intent.folder_entries))
-        pc_folders = tuple(folder_entries)
         folder_paths = media_folder_paths(folder_entries)
         primary_pc_folder = folder_paths[0] if folder_paths else ""
+
+        pc_folders = list(folder_entries)  # start with configured PC folders
+
+        # Optional Navidrome source
+        navidrome_url = getattr(settings, "navidrome_url", "").strip()
+        navidrome_username = getattr(settings, "navidrome_username", "").strip()
+        navidrome_password = getattr(settings, "navidrome_password", "")
+        if navidrome_url and navidrome_username and navidrome_password:
+            try:
+                from iopenpod.sync.navidrome_library import NavidromeLibrary
+
+                lib = NavidromeLibrary(
+                    navidrome_url,
+                    navidrome_username,
+                    navidrome_password,
+                    cache_dir=os.path.join(getattr(settings, "settings_dir", ""), "navidrome-cache"),
+                )
+                lib.sync()  # ensure cache is up-to-date
+                navidrome_cache = lib.cache_dir
+                if navidrome_cache and navidrome_cache not in pc_folders:
+                    pc_folders.append(navidrome_cache)
+                    logger.info("Navidrome library synced to %s", navidrome_cache)
+            except Exception:
+                logger.exception("Failed to sync Navidrome library; skipping")
 
         device_session = self._device_sessions.current_session()
         caps = device_session.capabilities
@@ -333,7 +357,7 @@ class SyncSessionController(QObject):
         fpcalc_path = getattr(settings, "fpcalc_path", "")
         return SyncDiffRequest(
             pc_folder=primary_pc_folder,
-            pc_folders=pc_folders,
+            pc_folders=tuple(pc_folders),
             ipod_tracks=self._library_cache.get_tracks(),
             ipod_path=self._device_manager.device_path or "",
             supports_video=supports_video,

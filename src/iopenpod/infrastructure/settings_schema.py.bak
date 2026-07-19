@@ -78,14 +78,11 @@ DEVICE_SETTING_KEYS = (
     "lastfm_api_secret",
     "lastfm_session_key",
     "lastfm_username",
-    "navidrome_url",
-    "navidrome_username",
-    "navidrome_password",
     "backup_before_sync",
     "backup_before_sync_mode",
     "normalize_tags_after_sync",
 )
-DEVICE_SECRET_KEYS = {"listenbrainz_token", "lastfm_api_key", "lastfm_api_secret", "lastfm_session_key", "navidrome_password"}
+DEVICE_SECRET_KEYS = {"listenbrainz_token", "lastfm_api_key", "lastfm_api_secret", "lastfm_session_key"}
 
 
 def normalize_backup_before_sync_mode(
@@ -276,10 +273,6 @@ class AppSettings:
     lastfm_api_secret: str = ""
     lastfm_session_key: str = ""
     lastfm_username: str = ""
-
-    navidrome_url: str = ""
-    navidrome_username: str = ""
-    navidrome_password: str = ""
 
     backup_before_sync: bool = True
     backup_before_sync_mode: str = ""

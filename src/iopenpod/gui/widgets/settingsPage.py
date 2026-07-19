@@ -1031,6 +1031,117 @@ class _LastFmAuthRow(SettingRow):
         self.credentials_changed.emit("", "", "", "")
 
 
+class _NavidromeCredsRow(SettingRow):
+    """Setting row with Navidrome URL, username, and password inputs."""
+
+    credentials_changed = pyqtSignal(str, str, str)  # url, username, password
+
+    def __init__(self, title: str, description: str = ""):
+        super().__init__(title, description)
+
+        right_layout = QHBoxLayout()
+        right_layout.setSpacing(8)
+        right_layout.setAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self.status_label = QLabel("")
+        self.status_label.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        self.status_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        right_layout.addWidget(self.status_label)
+
+        self.inputs_widget = QWidget()
+        inputs_layout = QHBoxLayout(self.inputs_widget)
+        inputs_layout.setContentsMargins(0, 0, 0, 0)
+        inputs_layout.setSpacing(8)
+
+        self.url_input = QLineEdit()
+        self.url_input.setPlaceholderText("http://localhost:4533")
+        self.url_input.setFixedWidth(180)
+        self.url_input.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        self.url_input.setStyleSheet(input_css())
+        inputs_layout.addWidget(self.url_input)
+
+        self.username_input = QLineEdit()
+        self.username_input.setPlaceholderText("Username")
+        self.username_input.setFixedWidth(120)
+        self.username_input.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        self.username_input.setStyleSheet(input_css())
+        inputs_layout.addWidget(self.username_input)
+
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("Password")
+        self.password_input.setFixedWidth(120)
+        self.password_input.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_input.setStyleSheet(input_css())
+        inputs_layout.addWidget(self.password_input)
+
+        right_layout.addWidget(self.inputs_widget)
+
+        self.connect_btn = QPushButton("Connect")
+        self.connect_btn.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        self.connect_btn.setFixedWidth(80)
+        self.connect_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.connect_btn.setStyleSheet(button_css("primary", "sm"))
+        self.connect_btn.clicked.connect(self._on_save)
+        right_layout.addWidget(self.connect_btn)
+
+        self.clear_btn = QPushButton("✕")
+        self.clear_btn.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        self.clear_btn.setFixedWidth(Design.ICON_BUTTON_SIZE)
+        self.clear_btn.setToolTip("Disconnect")
+        self.clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.clear_btn.setStyleSheet(icon_btn_css())
+        self.clear_btn.clicked.connect(self._on_clear)
+        self.clear_btn.hide()
+        right_layout.addWidget(self.clear_btn)
+
+        container = QWidget()
+        container.setLayout(right_layout)
+        self.add_control(container)
+
+    def _on_save(self):
+        url = self.url_input.text().strip()
+        username = self.username_input.text().strip()
+        password = self.password_input.text().strip()
+        if not url or not username or not password:
+            return
+        self.connect_btn.setEnabled(False)
+        self.connect_btn.setText("Testing…")
+        self.status_label.setText("Connecting…")
+        self.status_label.setStyleSheet(f"color: {Colors.ACCENT}; background: transparent; border: none;")
+        self.credentials_changed.emit(url, username, password)
+
+    def set_connected(self, url: str, username: str):
+        self.status_label.setText(f"✓ Connected as {username}")
+        self.status_label.setStyleSheet(f"color: {Colors.SUCCESS}; background: transparent; border: none;")
+        self.inputs_widget.hide()
+        self.connect_btn.hide()
+        self.clear_btn.show()
+
+    def set_disconnected(self):
+        self.status_label.setText("")
+        self.status_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; background: transparent; border: none;")
+        self.url_input.setText("")
+        self.username_input.setText("")
+        self.password_input.setText("")
+        self.inputs_widget.show()
+        self.connect_btn.show()
+        self.connect_btn.setEnabled(True)
+        self.connect_btn.setText("Connect")
+        self.clear_btn.hide()
+
+    def set_error(self, message: str):
+        self.status_label.setText(f"✗ {message}")
+        self.status_label.setStyleSheet(f"color: {Colors.DANGER}; background: transparent; border: none;")
+        self.connect_btn.setEnabled(True)
+        self.connect_btn.setText("Connect")
+
+    def _on_clear(self):
+        self.set_disconnected()
+        self.credentials_changed.emit("", "", "")
+
+
 # ── Card container ──────────────────────────────────────────────────────────
 
 class _CacheSizeRow(SettingRow):
@@ -1197,8 +1308,9 @@ class SettingsPage(QWidget):
         self._stack.addWidget(self._build_transcoding_page())   # 2
         self._stack.addWidget(self._build_tools_page())         # 3
         self._stack.addWidget(self._build_scrobbling_page())    # 4
-        self._stack.addWidget(self._build_storage_page())       # 5
-        self._stack.addWidget(self._build_backups_page())       # 6
+        self._stack.addWidget(self._build_navidrome_page())     # 5
+        self._stack.addWidget(self._build_storage_page())       # 6
+        self._stack.addWidget(self._build_backups_page())       # 7
         main.addWidget(self._stack, stretch=1)
 
         # Select first page
@@ -1244,7 +1356,7 @@ class SettingsPage(QWidget):
         nav_layout.setSpacing(0)
         nav_items = [
             "General", "Sync", "Transcoding",
-            "External Tools", "Scrobbling", "Storage", "Backups",
+            "External Tools", "Scrobbling", "Navidrome", "Storage", "Backups",
         ]
         for i, name in enumerate(nav_items):
             btn = SidebarNavButton(name)
@@ -1855,6 +1967,30 @@ class SettingsPage(QWidget):
             ),
         )
 
+    def _build_navidrome_page(self) -> QScrollArea:
+        self.navidrome_creds_row = _NavidromeCredsRow(
+            "Navidrome / Subsonic",
+            "Enter your Navidrome server URL, username, and password to sync your music library.",
+        )
+        self.navidrome_creds_row.credentials_changed.connect(self._on_navidrome_credentials_changed)
+
+        self.navidrome_status_label = QLabel("")
+        self.navidrome_status_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+        self.navidrome_status_label.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        self.navidrome_status_label.setStyleSheet(f"""
+            color: {Colors.TEXT_SECONDARY};
+            background: transparent;
+            border: none;
+            padding: 12px;
+        """)
+
+        card = _SettingsCard(
+            self.navidrome_creds_row,
+            self.navidrome_status_label,
+        )
+
+        return self._wrap_in_scroll(card)
+
     def _build_storage_page(self) -> QScrollArea:
         from iopenpod.infrastructure.settings_paths import default_cache_dir
         self.transcode_cache_dir = ResettableFolderRow(
@@ -2160,6 +2296,12 @@ class SettingsPage(QWidget):
             self.lastfm_auth_row.set_connected(s.lastfm_username)
         else:
             self.lastfm_auth_row.set_disconnected(s.lastfm_api_key, s.lastfm_api_secret)
+
+        # Navidrome
+        if s.navidrome_url and s.navidrome_username:
+            self.navidrome_creds_row.set_connected(s.navidrome_url, s.navidrome_username)
+        else:
+            self.navidrome_creds_row.set_disconnected()
 
         self.show_art.value = s.show_art_in_tracklist
         self.rounded_artwork.value = s.rounded_artwork
@@ -3325,3 +3467,114 @@ class SettingsPage(QWidget):
         ):
             return
         self.lastfm_auth_row.set_connected(username)
+
+    # ── Navidrome handlers ─────────────────────────────────────────────────
+
+    def _save_navidrome_credentials(
+        self,
+        url: str,
+        username: str,
+        password: str,
+        scope: str | None = None,
+        root: str | None = None,
+        key: str | None = None,
+        use_global: bool | None = None,
+    ) -> bool:
+        if scope is None:
+            ctx = self._current_device_context() if self._settings_scope == "device" else None
+            if ctx:
+                root, key = ctx
+                scope = "device"
+            else:
+                scope = "global"
+
+        if scope == "device" and root and key:
+            state = self._settings_service.get_device_settings_for_edit(root, key)
+            s = state.settings
+            s.navidrome_url = url
+            s.navidrome_username = username
+            s.navidrome_password = password
+            return self._save_device_settings_with_alert(
+                root,
+                s,
+                use_global_settings=self.use_global_settings.value if use_global is None else use_global,
+                device_key=key,
+            )
+
+        s = self._settings_service.get_global_settings()
+        s.navidrome_url = url
+        s.navidrome_username = username
+        s.navidrome_password = password
+        self._settings_service.save_global_settings(s)
+        return True
+
+    def _on_navidrome_credentials_changed(self, url: str, username: str, password: str):
+        """Handle Navidrome credentials save/clear."""
+        # If password is empty, the user clicked "Disconnect"
+        if not password:
+            if not self._save_navidrome_credentials("", "", ""):
+                return
+            self.navidrome_creds_row.set_disconnected()
+            return
+
+        ctx = self._current_device_context() if self._settings_scope == "device" else None
+        if ctx:
+            root, key = ctx
+            scope = "device"
+            use_global = self.use_global_settings.value
+        else:
+            root, key = "", ""
+            scope = "global"
+            use_global = False
+
+        # Validate the connection in a background thread
+        self.navidrome_creds_row.connect_btn.setEnabled(False)
+        self.navidrome_creds_row.connect_btn.setText("Testing…")
+
+        import threading
+
+        from PyQt6.QtCore import QMetaObject
+        from PyQt6.QtCore import Qt as QtCore_Qt
+
+        def _do_validate():
+            try:
+                from iopenpod.sync.navidrome_library import NavidromeClient
+                lib = NavidromeClient(url, username, password)
+                tracks = lib.get_all_songs()
+                # A successful ping yields a list (possibly empty)
+                _ = len(tracks)  # no-op, just confirms the call worked
+                result = (True, url, username, password, scope, root, key, use_global, "")
+            except Exception as exc:
+                result = (False, url, username, password, scope, root, key, use_global, str(exc))
+            self._pending_navidrome_result = result
+            QMetaObject.invokeMethod(
+                self, "_on_navidrome_validate_result",
+                QtCore_Qt.ConnectionType.QueuedConnection,
+            )
+
+        threading.Thread(target=_do_validate, daemon=True).start()
+
+    @pyqtSlot()
+    def _on_navidrome_validate_result(self):
+        """Called on main thread after Navidrome connection validation."""
+        ok, url, username, password, scope, root, key, use_global, msg = self._pending_navidrome_result
+
+        self.navidrome_creds_row.connect_btn.setEnabled(True)
+        self.navidrome_creds_row.connect_btn.setText("Connect")
+
+        if not ok:
+            self.navidrome_creds_row.set_error(msg)
+            return
+
+        if not self._save_navidrome_credentials(
+            url,
+            username,
+            password,
+            scope=scope,
+            root=root,
+            key=key,
+            use_global=use_global,
+        ):
+            return
+
+        self.navidrome_creds_row.set_connected(url, username)
