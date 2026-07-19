@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "iopenpod"
-version = "1.0.36"
-description = "Open-source iPod Classic sync tool — manage your iPod music library without iTunes. Reads and writes iTunesDB directly."
+version = "1.66.2"
+description = "Open-source iPod Classic sync tool — manage your iPod media library without iTunes. Reads and writes iTunesDB directly."
 authors = [
     {name = "John Gibbons", email = "johngibbons167@gmail.com"}
 ]
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 keywords = [
     "ipod", "ipod-classic", "itunes", "itunesdb", "music-sync",
     "ipod-manager", "pyqt6", "music-library", "ipod-sync",
@@ -22,6 +22,8 @@ classifiers = [
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Sound/Audio",
     "Topic :: Multimedia :: Sound/Audio :: Players",
@@ -38,33 +40,82 @@ dependencies = [
     "feedparser>=6.0.10",
     "requests>=2.31.0",
     "packaging>=23.0",
+    "tqdm>=4.67.3",
+    "python-dateutil>=2.9.0.post0",
 ]
 
 [project.scripts]
-iopenpod = "main:main"
+iopenpod = "iopenpod.__main__:main"
 
 [dependency-groups]
 dev = [
+    "mypy>=1.15.0",
     "nuitka>=4.0.3",
     "ordered-set>=4.1.0",
+    "pytest>=8.3.5",
+    "pytest-qt>=4.4.0",
     "pyinstaller>=6.19.0",
+    "ruff>=0.11.7",
     "zstandard>=0.25.0",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = [
-    "GUI",
-    "iTunesDB_Parser",
-    "iTunesDB_Shared",
-    "iTunesDB_Writer",
-    "ArtworkDB_Parser",
-    "ArtworkDB_Writer",
-    "SyncEngine",
-    "SQLiteDB_Writer",
-]
+packages = ["src/iopenpod"]
 
 [tool.flake8]
 # Allow line breaks before binary operators (W503) — matches Black's style
 extend-ignore = ["W503"]
 # Keep line length reasonable; adjust if you prefer a different value
-max-line-length = 88
+max-line-length = 320
+
+[tool.pytest.ini_options]
+addopts = "-p no:cacheprovider"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 320
+target-version = "py311"
+extend-exclude = ["compendium", "vendor"]
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+    "src/iopenpod/application/device_identity.py",
+    "src/iopenpod/application/services.py",
+    "src/iopenpod/application/context.py",
+    "src/iopenpod/application/jobs.py",
+    "src/iopenpod/application/progress.py",
+    "src/iopenpod/application/sync_review_model.py",
+    "src/iopenpod/application/sync_plan_builder.py",
+    "src/iopenpod/application/sync_options.py",
+    "src/iopenpod/application/sync_session.py",
+    "src/iopenpod/infrastructure/settings_persistence.py",
+    "src/iopenpod/infrastructure/settings_paths.py",
+    "src/iopenpod/infrastructure/settings_runtime.py",
+    "src/iopenpod/infrastructure/settings_schema.py",
+    "src/iopenpod/infrastructure/settings_secrets.py",
+    "src/iopenpod/infrastructure/version.py",
+    "src/iopenpod/sync/contracts.py",
+    "src/iopenpod/sync/database_commit.py",
+    "src/iopenpod/sync/quick_writes.py",
+    "scripts/check_architecture.py",
+    "tests/test_architecture_checks.py",
+    "tests/test_backup_jobs.py",
+    "tests/test_settings_persistence.py",
+    "tests/test_settings_secrets.py",
+    "tests/test_settings_snapshot.py",
+    "tests/test_device_session_snapshots.py",
+    "tests/test_device_identity_helpers.py",
+    "tests/test_device_scan_jobs.py",
+    "tests/test_quick_writes.py",
+    "tests/test_sync_review_model.py",
+    "tests/test_sync_plan_builder.py",
+    "src/iopenpod/__main__.py",
+]
+follow_imports = "silent"
+ignore_missing_imports = true
+show_error_codes = true

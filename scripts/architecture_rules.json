@@ -1,0 +1,105 @@
+{
+  "allowed_gui_public_imports": [
+    "iopenpod.sync.contracts",
+    "iopenpod.sync.review_selection"
+  ],
+  "allowed_gui_forbidden_imports": {
+    "src/iopenpod/gui/app.py": ["iopenpod.sync.album_chapters"],
+    "src/iopenpod/gui/widgets/MBListView.py": ["iopenpod.sync._playlist_builder"],
+    "src/iopenpod/gui/widgets/devicePicker.py": ["iopenpod.device"],
+    "src/iopenpod/gui/widgets/musicBrowser.py": ["iopenpod.sync.album_chapters", "iopenpod.device"],
+    "src/iopenpod/gui/widgets/photoBrowser.py": ["iopenpod.sync.photos", "iopenpod.device.artwork"],
+    "src/iopenpod/gui/widgets/podcastBrowser.py": [
+      "iopenpod.podcasts.artwork",
+      "iopenpod.podcasts.feed_parser",
+      "iopenpod.podcasts.models",
+      "iopenpod.podcasts.network_errors",
+      "iopenpod.podcasts.podcast_sync",
+      "iopenpod.podcasts.subscription_store"
+    ],
+    "src/iopenpod/gui/widgets/podcastSearchDialog.py": [
+      "iopenpod.podcasts.itunes_search",
+      "iopenpod.podcasts.network_errors"
+    ],
+    "src/iopenpod/gui/widgets/selectiveSyncBrowser.py": [
+      "iopenpod.sync.pc_library",
+      "iopenpod.sync.photos",
+      "iopenpod.sync.sync_playlist_files",
+      "iopenpod.sync.unknown_metadata"
+    ],
+    "src/iopenpod/gui/widgets/settingsPage.py": [
+      "iopenpod.sync.audio_fingerprint",
+      "iopenpod.sync.dependency_manager",
+      "iopenpod.sync.lb_scrobbler",
+      "iopenpod.sync.transcode_cache",
+      "iopenpod.sync.transcoder",
+      "iopenpod.device"
+    ]
+  },
+  "allowed_import_cycles": [
+    [
+      "iopenpod.device.authority",
+      "iopenpod.device.info",
+      "iopenpod.device.scanner",
+      "iopenpod.device.virtual",
+      "iopenpod.device.vpd_libusb",
+      "iopenpod.device.vpd_linux"
+    ],
+    [
+      "iopenpod.artworkdb_parser.chunk_parser",
+      "iopenpod.artworkdb_parser.mhfd_parser",
+      "iopenpod.artworkdb_parser.mhii_parser",
+      "iopenpod.artworkdb_parser.mhli_parser",
+      "iopenpod.artworkdb_parser.mhni_parser",
+      "iopenpod.artworkdb_parser.mhod_parser",
+      "iopenpod.artworkdb_parser.mhsd_parser"
+    ],
+    [
+      "iopenpod.itunesdb_parser.chunk_parser",
+      "iopenpod.itunesdb_parser.mhbd_parser",
+      "iopenpod.itunesdb_parser.mhia_parser",
+      "iopenpod.itunesdb_parser.mhii_parser",
+      "iopenpod.itunesdb_parser.mhip_parser",
+      "iopenpod.itunesdb_parser.mhit_parser",
+      "iopenpod.itunesdb_parser.mhsd_parser",
+      "iopenpod.itunesdb_parser.mhyp_parser"
+    ]
+  ],
+  "allowed_runtime_singleton_access": {},
+  "allowed_except_exception_pass_counts": {
+    "src/iopenpod/artworkdb_writer/art_extractor.py": 3,
+    "src/iopenpod/gui/app.py": 2,
+    "src/iopenpod/gui/hidpi.py": 4,
+    "src/iopenpod/gui/styles.py": 2,
+    "src/iopenpod/gui/widgets/MBListView.py": 5,
+    "src/iopenpod/gui/widgets/backupBrowser.py": 1,
+    "src/iopenpod/gui/widgets/musicBrowser.py": 2,
+    "src/iopenpod/gui/widgets/playlistBrowser.py": 7,
+    "src/iopenpod/gui/widgets/podcastBrowser.py": 4,
+    "src/iopenpod/gui/widgets/pooledCardGrid.py": 2,
+    "src/iopenpod/gui/widgets/selectiveSyncBrowser.py": 2,
+    "src/iopenpod/gui/widgets/settingsPage.py": 5,
+    "src/iopenpod/gui/widgets/sidebar.py": 1,
+    "src/iopenpod/gui/widgets/syncReview.py": 1,
+    "src/iopenpod/podcasts/downloader.py": 2,
+    "src/iopenpod/podcasts/feed_parser.py": 1,
+    "src/iopenpod/sqlitedb_writer/cbk_writer.py": 3,
+    "src/iopenpod/sync/audio_fingerprint.py": 2,
+    "src/iopenpod/sync/dependency_manager.py": 1,
+    "src/iopenpod/sync/fingerprint_diff_engine.py": 2,
+    "src/iopenpod/sync/photos.py": 2,
+    "src/iopenpod/sync/sync_executor.py": 5,
+    "src/iopenpod/sync/transcode_cache.py": 1,
+    "src/iopenpod/sync/transcoder.py": 6,
+    "src/iopenpod/application/bootstrap.py": 3,
+    "src/iopenpod/application/runtime.py": 1,
+    "src/iopenpod/itunesdb_writer/hash72.py": 1,
+    "src/iopenpod/itunesdb_writer/mhbd_writer.py": 3,
+    "src/iopenpod/device/authority.py": 1,
+    "src/iopenpod/device/dump.py": 1,
+    "src/iopenpod/device/info.py": 6,
+    "src/iopenpod/device/usb_backend.py": 1,
+    "src/iopenpod/device/vpd_iokit.py": 1,
+    "src/iopenpod/device/vpd_libusb.py": 5
+  }
+}

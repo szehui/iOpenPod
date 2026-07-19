@@ -1,6 +1,6 @@
 # iOpenPod Sync — How It Works
 
-Complete reference for the sync system that bridges a PC music library to an iPod Classic.
+Complete reference for the sync system that bridges a PC media library to an iPod Classic.
 
 ---
 
@@ -11,14 +11,14 @@ The sync system mirrors a folder of music files on a PC to an iPod Classic. It u
 Three sources of truth are kept consistent:
 
 | Source | Location | Purpose |
-|--------|----------|---------|
+| -------- | ---------- | --------- |
 | **Filesystem** | `/iPod_Control/Music/F00–F49/` | Actual audio files on iPod |
 | **iTunesDB** | `/iPod_Control/iTunes/iTunesDB` | Binary database the iPod firmware reads |
-| **iOpenPod.json** | `/iPod_Control/iTunes/iOpenPod.json` | Our mapping file (`fingerprint → db_id`) |
+| **iOpenPod.json** | `/iPod_Control/iTunes/iOpenPod.json` | Our mapping file (`fingerprint → db_track_id`) |
 
 ```mermaid
 flowchart LR
-    PC["PC Music Folder"] -- sync --> iPod
+    PC["PC Media Folder"] -- sync --> iPod
     subgraph iPod
         FS["Filesystem\n(F00–F49)"]
         DB["iTunesDB\n(binary)"]
@@ -33,7 +33,7 @@ flowchart LR
 ## External Dependencies
 
 | Tool | Purpose | Required? |
-|------|---------|-----------|
+| ------ | --------- | ----------- |
 | **fpcalc** (Chromaprint) | Compute acoustic fingerprints | Yes — sync cannot start without it |
 | **ffmpeg** | Transcode FLAC/OGG/etc. to iPod-compatible formats | Optional — only MP3/M4A work without it |
 | **mutagen** | Read/write audio metadata (tags) | Yes (Python package) |
@@ -49,7 +49,7 @@ The GUI checks for both tools at sync start. Missing `fpcalc` blocks the sync en
 Two tracks are the "same" if and only if they share the same fingerprint AND the same album name (case-insensitive).
 
 | Scenario | Same FP? | Same Album? | Result |
-|----------|----------|-------------|--------|
+| ---------- | ---------- | ------------- | -------- |
 | Same file, re-tagged | Yes | Yes | Matched — metadata update only |
 | Same song on original album + Greatest Hits | Yes | No | Two separate iPod tracks |
 | Different song, same album | No | — | Two separate iPod tracks |
@@ -63,7 +63,7 @@ This prevents the "greatest hits problem" where the same recording appears on mu
 
 ```mermaid
 flowchart TD
-    START([User clicks Sync]) --> FOLDER[Select PC music folder]
+    START([User clicks Sync]) --> FOLDER[Select PC media folder]
     FOLDER --> PREFLIGHT{Pre-flight checks}
     PREFLIGHT -- "fpcalc missing" --> BLOCK[Sync blocked]
     PREFLIGHT -- OK --> INTEGRITY[Phase 0: Integrity Check]
@@ -104,7 +104,7 @@ flowchart TD
     B --> C["Check C\nFilesystem → iTunesDB"]
 
     A -- "Track in DB but file missing" --> A_FIX["Remove from working set\n(diff engine won't see it)"]
-    B -- "Mapping db_id not in DB" --> B_FIX["Remove stale entry\nfrom iOpenPod.json"]
+    B -- "Mapping db_track_id not in DB" --> B_FIX["Remove stale entry\nfrom iOpenPod.json"]
     C -- "File on iPod not in DB" --> C_FIX["Delete orphan file\n(reclaim space)"]
 ```
 
@@ -114,7 +114,7 @@ For every track in iTunesDB with a `Location` field, verify the audio file exist
 
 ### Check B: Mapping → iTunesDB
 
-For every `db_id` in iOpenPod.json, verify it exists in the (already-cleaned) track list. Stale entries are removed from the mapping. If any stale entries are found, the cleaned mapping is saved immediately.
+For every `db_track_id` in iOpenPod.json, verify it exists in the (already-cleaned) track list. Stale entries are removed from the mapping. If any stale entries are found, the cleaned mapping is saved immediately.
 
 ### Check C: Filesystem → iTunesDB (Orphan Detection)
 
@@ -126,12 +126,12 @@ The integrity report is stored on the `SyncPlan` and displayed in the GUI as a n
 
 ## Phase 1 — PC Scan & Fingerprinting
 
-The `PCLibrary` class walks the user's chosen music folder recursively, reading metadata from every audio file via mutagen.
+The `PCLibrary` class walks the user's chosen media folder recursively, reading metadata from every audio file via mutagen.
 
 ### Supported Formats
 
 | Format | Extensions | Native to iPod? |
-|--------|-----------|-----------------|
+| -------- | ----------- | ----------------- |
 | MP3 | `.mp3` | Yes — direct copy |
 | AAC/M4A | `.m4a`, `.aac` | Yes — direct copy |
 | FLAC | `.flac` | No → transcode to ALAC |
@@ -161,7 +161,7 @@ flowchart LR
 Fingerprints are stored in file metadata to avoid recomputation:
 
 | Format | Tag Location |
-|--------|-------------|
+| -------- | ------------- |
 | MP3 | `TXXX:ACOUSTID_FINGERPRINT` (ID3v2) |
 | M4A/AAC | `----:com.apple.iTunes:ACOUSTID_FINGERPRINT` |
 | FLAC/OGG | `ACOUSTID_FINGERPRINT` (Vorbis comment) |
@@ -222,7 +222,7 @@ When a fingerprint has multiple mapping entries (same song on multiple albums), 
 ### Change Detection Details
 
 | Check | Method | Triggers |
-|-------|--------|----------|
+| ------- | -------- | ---------- |
 | **File changed** | `size + mtime` gate: size diff > 1% AND > 10 KB, or mtime changed AND size changed | `UPDATE_FILE` — re-copy/transcode |
 | **Metadata changed** | Compare 8 fields: title, artist, album, album_artist, genre, year, track_number, disc_number | `UPDATE_METADATA` — update TrackInfo |
 | **Artwork changed** | Compare `art_hash` (MD5 of embedded image bytes) vs mapping's stored hash | `UPDATE_ARTWORK` — mapping update + full ArtworkDB rewrite |
@@ -232,7 +232,7 @@ When a fingerprint has multiple mapping entries (same song on multiple albums), 
 ### Metadata Fields Compared
 
 | PC Field | iPod Track Key |
-|----------|---------------|
+| ---------- | --------------- |
 | `title` | `Title` |
 | `artist` | `Artist` |
 | `album` | `Album` |
@@ -251,7 +251,7 @@ Two sources of removals:
 1. **Fingerprints entirely absent from PC** — every mapping entry for that fingerprint becomes a `REMOVE_FROM_IPOD` action.
 2. **Unclaimed mapping entries** — fingerprint still exists on PC but some mapping entries weren't claimed by any identity group (e.g., a song was removed from Greatest Hits but kept on the original album).
 
-Stale mapping entries (db_id in mapping but not in iTunesDB) are silently cleaned and not shown to the user.
+Stale mapping entries (db_track_id in mapping but not in iTunesDB) are silently cleaned and not shown to the user.
 
 ---
 
@@ -266,7 +266,7 @@ For every matched track, if the iPod track has `artworkCount == 0` or `mhiiLink 
 The diff engine produces a `SyncPlan` containing all categorized actions:
 
 | Category | Action | Color in GUI |
-|----------|--------|-------------|
+| ---------- | -------- | ------------- |
 | Add to iPod | `ADD_TO_IPOD` | Green |
 | Remove from iPod | `REMOVE_FROM_IPOD` | Red |
 | Re-sync Changed Files | `UPDATE_FILE` | Cyan |
@@ -276,6 +276,7 @@ The diff engine produces a `SyncPlan` containing all categorized actions:
 | Sync Ratings | `SYNC_RATING` | Gold |
 
 Additional informational sections (no checkboxes):
+
 - **Integrity Fixes** — auto-repaired issues from Phase 0
 - **Fingerprint Errors** — files that couldn't be fingerprinted
 - **Duplicates** — true duplicate groups showing all file paths
@@ -309,7 +310,7 @@ stateDiagram-v2
 Shows a progress bar with friendly stage labels:
 
 | Internal Stage | Displayed As |
-|---------------|-------------|
+| --------------- | ------------- |
 | `load_mapping` | Loading iPod mapping |
 | `integrity` | Checking iPod integrity |
 | `scan_pc` | Scanning PC library |
@@ -319,6 +320,7 @@ Shows a progress bar with friendly stage labels:
 ### Plan Review State
 
 A tree view groups actions by category. Each action item has:
+
 - **Checkbox** — include/exclude from sync (Select All / Select None buttons available)
 - **Title, Artist, Album** columns
 - **Size** or field-specific info (changed fields for metadata, play delta for play counts, star display for ratings)
@@ -344,15 +346,17 @@ All stages run sequentially. Each checks for cancellation between items. The dat
 ### Stage 1: Remove Tracks
 
 For each `REMOVE_FROM_IPOD` item:
+
 1. Delete the audio file from iPod (`/iPod_Control/Music/F**/...`)
-2. Remove the track from the in-memory `tracks_by_db_id` dictionary
+2. Remove the track from the in-memory `tracks_by_db_track_id` dictionary
 3. Remove the mapping entry from iOpenPod.json (in-memory)
 
-Also cleans stale mapping entries (db_id exists in mapping but not in iTunesDB).
+Also cleans stale mapping entries (db_track_id exists in mapping but not in iTunesDB).
 
 ### Stage 2: Re-sync Changed Files
 
 For each `UPDATE_FILE` item:
+
 1. Delete the old file from iPod
 2. Invalidate the transcode cache entry for this fingerprint
 3. Copy or transcode the new file to iPod (see [File Copy & Transcoding](#file-copy--transcoding))
@@ -362,24 +366,27 @@ For each `UPDATE_FILE` item:
 ### Stage 3: Update Metadata
 
 For each `UPDATE_METADATA` item:
+
 - Apply changed fields to the `TrackInfo` object (title, artist, album, album_artist, genre, year, track_number, disc_number)
 - Refresh the mapping's `source_mtime` and `source_size` so next sync doesn't see a spurious file change
 
 ### Stage 3b: Update Artwork Mapping
 
 For each `UPDATE_ARTWORK` item:
+
 - Update the mapping's `art_hash` to the new value (or None if art was removed)
 - The actual artwork re-encoding is handled by the full ArtworkDB rewrite in Stage 7
 
 ### Stage 4: Add New Tracks
 
 For each `ADD_TO_IPOD` item:
+
 1. Copy or transcode the file to iPod (see [File Copy & Transcoding](#file-copy--transcoding))
 2. Create a `TrackInfo` object from PC metadata
 3. Track the fingerprint and PC metadata for post-write backpatching
 4. Record the PC file path for artwork extraction
 
-**Note**: Mapping entries for new tracks are NOT created yet — the db_id is 0 until the database is written.
+**Note**: Mapping entries for new tracks are NOT created yet — the db_track_id is 0 until the database is written.
 
 ### Stage 5: Sync Play Counts
 
@@ -390,8 +397,9 @@ Play counts use an **additive** strategy: iPod plays/skips add to PC totals.
 The iPod firmware does **not** modify iTunesDB directly.  Instead it creates a separate binary file at `/iPod_Control/iTunes/Play Counts` that records per-track deltas (play count, skip count, rating, timestamps) accumulated since the last sync.
 
 When reading the existing database (`_read_existing_database`), the executor:
+
 1. Parses the iTunesDB to get the track list
-2. Parses the Play Counts file (if present) via `iTunesDB_Parser.playcounts`
+2. Parses the Play Counts file (if present) via `iopenpod.itunesdb_parser.playcounts`
 3. Merges the deltas: `playCount += recent_plays`, `skipCount += recent_skips`
 4. Stores `recent_playcount` and `recent_skipcount` on each track dict
 
@@ -402,7 +410,7 @@ After the database is written, the Play Counts file is **deleted** (matching lib
 If `write_back_to_pc` is enabled in settings, play count and skip count deltas are written to PC file metadata:
 
 | Format | Play Count Tag | Skip Count Tag |
-|--------|---------------|----------------|
+| -------- | --------------- | ---------------- |
 | MP3 | `PCNT` frame (ID3v2 play counter) | `TXXX:SKIP_COUNT` (user text frame) |
 | M4A | `----:com.apple.iTunes:PLAY_COUNT` (freeform atom) | `----:com.apple.iTunes:SKIP_COUNT` (freeform atom) |
 | FLAC/OGG | `PLAY_COUNT` (Vorbis comment) | `SKIP_COUNT` (Vorbis comment) |
@@ -414,7 +422,7 @@ Ratings use **last-write-wins** with iPod preferred (since the user most recentl
 If `write_back_to_pc` is enabled:
 
 | Format | Tag | Scale |
-|--------|-----|-------|
+| -------- | ----- | ------- |
 | MP3 | `POPM` (Popularimeter, email="iOpenPod") | 0–255 mapped from stars |
 | M4A | `----:com.apple.iTunes:RATING` (freeform atom) | 0–100 as string |
 | FLAC/OGG | `RATING` (Vorbis comment) | 0–100 as string |
@@ -443,7 +451,7 @@ flowchart TD
     HASH72 --> WRITE
     NONE --> WRITE
     WRITE["Atomic write\n(temp file → os.replace)"]
-    WRITE --> BACKPATCH["Backpatch new track db_ids\n(writer assigned them)"]
+    WRITE --> BACKPATCH["Backpatch new track db_track_ids\n(writer assigned them)"]
     BACKPATCH --> SAVE_MAP["Save iOpenPod.json\n(mapping with new entries)"]
 ```
 
@@ -452,20 +460,21 @@ flowchart TD
 #### ArtworkDB Write
 
 When PC file paths are available, the writer:
+
 1. Extracts embedded album art from each PC source file via mutagen
 2. Deduplicates by image content hash (one MHII per unique image)
 3. Converts to RGB565 at multiple sizes (140×140, 56×56)
 4. Writes `.ithmb` pixel data files
 5. Writes the ArtworkDB binary metadata
-6. Returns `db_id → (img_id, src_image_size)` for linking tracks
+6. Returns `db_track_id → (img_id, src_image_size)` for linking tracks
 
 #### Database Structure Written
 
-```
+```md
 MHBD (database header, 244 bytes)
 ├── MHSD type 4 — Album list (MHLA → MHIA × N)
 ├── MHSD type 1 — Track list (MHLT → MHIT × N → MHOD strings)
-├── MHSD type 3 — Podcast list (copy of playlist data)
+├── MHSD type 3 — Playlist list with podcast-aware grouping
 ├── MHSD type 2 — Playlist list (MHLP → MHYP master → MHIP × N)
 └── MHSD type 5 — Smart playlist list (empty)
 ```
@@ -475,8 +484,8 @@ MHBD (database header, 244 bytes)
 iPod Classic and Nano 3G+ require a device-specific hash at MHBD offset 0x58/0x72. Without it, the iPod rejects the database.
 
 | Device | Hash Type | Requirement |
-|--------|-----------|-------------|
-| iPod 1G–5G, Mini, Photo, Nano 1G–2G | None | Just length recalculation |
+| -------- | ----------- | ------------- |
+| iPod 1G–5.5G, iPod Mini 1G–2G, iPod Nano 1G–2G | None | Just length recalculation |
 | Classic (all), Nano 3G, Nano 4G | HASH58 | FireWire GUID from SysInfo |
 | Nano 5G | HASH72 | HashInfo file or reference DB |
 | Nano 6G/7G | HASHAB | FireWire GUID + wasmtime (WASM module) |
@@ -506,7 +515,7 @@ flowchart TD
 ### Transcode Targets
 
 | Source Format | Target | Codec |
-|--------------|--------|-------|
+| -------------- | -------- | ------- |
 | FLAC, WAV, AIFF | ALAC (.m4a) | Lossless → lossless |
 | OGG, Opus, WMA | AAC (.m4a) | Lossy → lossy |
 | MP3, M4A | — | Direct copy |
@@ -518,6 +527,7 @@ AAC bitrate is configurable in settings (default: 256 kbps).
 Located at `~/.iopenpod/transcode_cache/`. Keyed by `fingerprint:target_format[:bitrate]`.
 
 Benefits:
+
 - **Multiple iPods**: Transcode once, copy to all devices
 - **Re-sync**: If iPod is wiped, cached files skip re-transcoding
 - **Invalidation**: Cache entries are invalidated when the source file changes (size mismatch)
@@ -532,7 +542,7 @@ Files are distributed across `F00`–`F49` folders using round-robin. Filenames 
 
 Before Stage 1, the executor checks available disk space on the iPod:
 
-```
+```md
 needed = bytes_to_add - bytes_to_remove + 10 MB (buffer)
 if needed > disk.free → abort with error
 ```
@@ -555,8 +565,8 @@ The user can cancel at any point during execution. The `is_cancelled` callback (
 ## Settings That Affect Sync
 
 | Setting | Default | Effect |
-|---------|---------|--------|
-| `music_folder` | — | Remembered PC folder path |
+| --------- | --------- | -------- |
+| `media_folder` | — | Remembered PC folder path |
 | `write_back_to_pc` | `false` | When true, play counts and ratings are written to PC file metadata |
 | `aac_quality` | `"normal"` | Quality preset for lossy transcodes: high, normal, compact, spoken |
 | `prefer_lossy` | `false` | When true, lossless (FLAC/WAV/AIFF) encodes to AAC instead of ALAC |
@@ -568,7 +578,7 @@ The user can cancel at any point during execution. The `is_cancelled` callback (
 ```mermaid
 flowchart TB
     subgraph PC ["PC Side"]
-        FOLDER["Music Folder\n(.mp3, .flac, .m4a, ...)"]
+        FOLDER["Media Folder\n(.mp3, .flac, .m4a, ...)"]
         TAGS["File Metadata\n(mutagen)"]
         FP_TAG["Stored Fingerprints\n(ACOUSTID_FINGERPRINT tag)"]
     end
@@ -585,7 +595,7 @@ flowchart TB
         MUSIC["Music/F00–F49/\n(audio files)"]
         ITDB["iTunesDB\n(binary DB)"]
         ARTDB["ArtworkDB + ithmb\n(album art)"]
-        MAPPING["iOpenPod.json\n(fingerprint → db_id)"]
+        MAPPING["iOpenPod.json\n(fingerprint → db_track_id)"]
         SYSINFO["Device/SysInfo\n(FireWire GUID)"]
     end
 
@@ -614,7 +624,7 @@ flowchart TB
 ## Error Handling Summary
 
 | Situation | Behavior |
-|-----------|----------|
+| ----------- | ---------- |
 | `fpcalc` not installed | Sync blocked with error dialog |
 | `ffmpeg` not installed | Warning — only native formats sync |
 | File fails to fingerprint | Skipped, reported in plan as warning |
@@ -631,21 +641,21 @@ flowchart TB
 ## File Inventory
 
 | File | Role |
-|------|------|
-| [SyncEngine/pc_library.py](SyncEngine/pc_library.py) | Scan PC folder, extract metadata via mutagen |
-| [SyncEngine/audio_fingerprint.py](SyncEngine/audio_fingerprint.py) | Compute/read/write Chromaprint fingerprints |
-| [SyncEngine/fingerprint_diff_engine.py](SyncEngine/fingerprint_diff_engine.py) | Compare PC library vs iPod, produce SyncPlan |
-| [SyncEngine/sync_executor.py](SyncEngine/sync_executor.py) | Execute the 7-stage sync plan |
-| [SyncEngine/mapping.py](SyncEngine/mapping.py) | Manage iOpenPod.json (fingerprint → db_id) |
-| [SyncEngine/integrity.py](SyncEngine/integrity.py) | Three-way consistency validation |
-| [SyncEngine/transcoder.py](SyncEngine/transcoder.py) | FFmpeg transcoding (FLAC→ALAC, etc.) |
-| [SyncEngine/transcode_cache.py](SyncEngine/transcode_cache.py) | Cache transcoded files across syncs/devices |
-| [iTunesDB_Writer/mhbd_writer.py](iTunesDB_Writer/mhbd_writer.py) | Build and write complete iTunesDB |
-| [iTunesDB_Writer/mhit_writer.py](iTunesDB_Writer/mhit_writer.py) | Write individual track entries |
-| [iTunesDB_Writer/device.py](iTunesDB_Writer/device.py) | Detect iPod model and hash requirements |
-| [iTunesDB_Writer/hash58.py](iTunesDB_Writer/hash58.py) | HASH58 (HMAC-SHA1 w/ FireWire ID) |
-| [iTunesDB_Writer/hash72.py](iTunesDB_Writer/hash72.py) | HASH72 (AES-CBC w/ HashInfo) |
-| [ArtworkDB_Writer/artwork_writer.py](ArtworkDB_Writer/artwork_writer.py) | Extract art, write ArtworkDB + ithmb |
-| [GUI/widgets/syncReview.py](GUI/widgets/syncReview.py) | Sync review UI (tree view, progress, results) |
-| [GUI/app.py](GUI/app.py) | Main window — sync initiation and wiring |
-| [GUI/settings.py](GUI/settings.py) | AppSettings with sync-related options |
+| ------ | ------ |
+| [src/iopenpod/sync/pc_library.py](../src/iopenpod/sync/pc_library.py) | Scan PC folder, extract metadata via mutagen |
+| [src/iopenpod/sync/audio_fingerprint.py](../src/iopenpod/sync/audio_fingerprint.py) | Compute/read/write Chromaprint fingerprints |
+| [src/iopenpod/sync/fingerprint_diff_engine.py](../src/iopenpod/sync/fingerprint_diff_engine.py) | Compare PC library vs iPod, produce SyncPlan |
+| [src/iopenpod/sync/sync_executor.py](../src/iopenpod/sync/sync_executor.py) | Execute the 7-stage sync plan |
+| [src/iopenpod/sync/mapping.py](../src/iopenpod/sync/mapping.py) | Manage iOpenPod.json (fingerprint → db_track_id) |
+| [src/iopenpod/sync/integrity.py](../src/iopenpod/sync/integrity.py) | Three-way consistency validation |
+| [src/iopenpod/sync/transcoder.py](../src/iopenpod/sync/transcoder.py) | FFmpeg transcoding (FLAC→ALAC, etc.) |
+| [src/iopenpod/sync/transcode_cache.py](../src/iopenpod/sync/transcode_cache.py) | Cache transcoded files across syncs/devices |
+| [src/iopenpod/itunesdb_writer/mhbd_writer.py](../src/iopenpod/itunesdb_writer/mhbd_writer.py) | Build and write complete iTunesDB |
+| [src/iopenpod/itunesdb_writer/mhit_writer.py](../src/iopenpod/itunesdb_writer/mhit_writer.py) | Write individual track entries |
+| [src/iopenpod/itunesdb_writer/device.py](../src/iopenpod/itunesdb_writer/device.py) | Detect iPod model and hash requirements |
+| [src/iopenpod/itunesdb_writer/hash58.py](../src/iopenpod/itunesdb_writer/hash58.py) | HASH58 (HMAC-SHA1 w/ FireWire ID) |
+| [src/iopenpod/itunesdb_writer/hash72.py](../src/iopenpod/itunesdb_writer/hash72.py) | HASH72 (AES-CBC w/ HashInfo) |
+| [src/iopenpod/artworkdb_writer/artwork_writer.py](../src/iopenpod/artworkdb_writer/artwork_writer.py) | Extract art, write ArtworkDB + ithmb |
+| [src/iopenpod/gui/widgets/syncReview.py](../src/iopenpod/gui/widgets/syncReview.py) | Sync review UI (tree view, progress, results) |
+| [src/iopenpod/gui/app.py](../src/iopenpod/gui/app.py) | Main window — sync initiation and wiring |
+| [src/iopenpod/gui/settings.py](../src/iopenpod/gui/settings.py) | AppSettings with sync-related options |
