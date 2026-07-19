@@ -19,6 +19,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
+from iopenpod.infrastructure.settings_paths import default_data_dir
+
 from PIL import Image, ImageOps
 from PyQt6.QtCore import QPoint, QSize, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QCursor, QFont, QImage, QPixmap
@@ -85,6 +87,26 @@ from .pooledPhotoGrid import PhotoTileModel, PooledPhotoGridView
 from .sidebarNavButton import SidebarNavButton
 
 log = logging.getLogger(__name__)
+
+def _entry_directory(entry: str | dict[str, object]) -> str:
+    """Extract the directory path from a folder entry (string or dict)."""
+    if isinstance(entry, dict):
+        return str(entry.get("directory", "") or "")
+    return entry
+
+
+def _path_matches_navidrome_cache(folder_entry: str | dict[str, object], navidrome_cache_path: str) -> bool:
+    """Return True if folder_entry refers to the navidrome cache directory."""
+    entry_path = _entry_directory(folder_entry)
+    if not entry_path:
+        return False
+    entry_abs = os.path.abspath(os.path.expanduser(entry_path))
+    cache_abs = os.path.abspath(navidrome_cache_path)
+    try:
+        return os.path.samefile(entry_abs, cache_abs)
+    except (FileNotFoundError, OSError):
+        return os.path.normcase(entry_abs) == os.path.normcase(cache_abs)
+
 
 if TYPE_CHECKING:
     from iopenpod.application.services import DeviceSessionService, SettingsService
@@ -186,6 +208,7 @@ class _PCLibScanWorker(QThread):
     def run(self):
         try:
             from iopenpod.sync.pc_library import PCLibrary
+            log.debug("PCLibScanWorker scanning folders: %s", self._folders)
             lib = PCLibrary(self._folder_entries)
 
             def _on_track_progress(current: int, total: int, filename: str) -> None:
@@ -2490,33 +2513,32 @@ class SelectiveSyncBrowser(QWidget):
             scan_workers = 0
         scan_workers = scan_workers or None
 
-        # Optional Navidrome source for selective sync
-        navidrome_url = getattr(settings, "navidrome_url", "").strip()
-        navidrome_username = getattr(settings, "navidrome_username", "").strip()
-        navidrome_password = getattr(settings, "navidrome_password", "")
-        if navidrome_url and navidrome_username and navidrome_password:
-            try:
-                from iopenpod.sync.navidrome_library import NavidromeLibrary
-                from iopenpod.infrastructure.settings_paths import default_data_dir
+        # If user explicitly added Navidrome Library as a folder, sync it now
+        navidrome_cache_path = os.path.abspath(
+            os.path.join(default_data_dir(), "navidrome-cache")
+        )
+        if any(
+            _path_matches_navidrome_cache(f, navidrome_cache_path)
+            for f in self._folder_entries
+        ):
+            settings = self._settings_service.get_effective_settings()
+            nd_url = getattr(settings, "navidrome_url", "").strip()
+            nd_user = getattr(settings, "navidrome_username", "").strip()
+            nd_pass = getattr(settings, "navidrome_password", "")
+            if nd_url and nd_user and nd_pass:
+                try:
+                    from iopenpod.sync.navidrome_library import NavidromeLibrary
 
-                cache_base = getattr(settings, "settings_dir", "") or default_data_dir()
-                nd_lib = NavidromeLibrary(
-                    navidrome_url,
-                    navidrome_username,
-                    navidrome_password,
-                    cache_dir=os.path.join(cache_base, "navidrome-cache"),
+                    nd_lib = NavidromeLibrary(nd_url, nd_user, nd_pass, navidrome_cache_path)
+                    nd_lib.sync()
+                    log.info("Navidrome synced for selective scan: %s", navidrome_cache_path)
+                except Exception:
+                    log.exception("Failed to sync Navidrome library for selective scan")
+            else:
+                log.warning(
+                    "Navidrome cache dir is in folder list but credentials not configured "
+                    "— set them in Settings > Navidrome"
                 )
-                nd_lib.sync()
-                cache_path = os.path.abspath(nd_lib.cache_dir)
-                # Inject the cache folder into the PC scan list
-                if isinstance(self._folder_entries, tuple):
-                    self._folder_entries = list(self._folder_entries)
-                if cache_path not in self._folder_entries:
-                    self._folder_entries.append(cache_path)
-                    self._folders = media_folder_paths(self._folder_entries)
-                    log.info("Navidrome cache added to selective scan: %s", cache_path)
-            except Exception:
-                log.exception("Failed to sync Navidrome library for selective scan")
 
         self._scan_worker = _PCLibScanWorker(
             self._folder_entries,

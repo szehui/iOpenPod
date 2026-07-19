@@ -3698,9 +3698,14 @@ class PCFolderDialog(QDialog):
         last_folder: object = "",
         *,
         sync_available: bool = True,
+        navidrome_available: bool = False,
+        navidrome_cache_dir: str = "",
     ):
         super().__init__(parent)
         self._sync_available = bool(sync_available)
+        self._navidrome_available = navidrome_available
+        self._navidrome_cache_dir = navidrome_cache_dir
+        self._navidrome_enabled = self._check_navidrome_in_folders()
         self.setWindowTitle(
             "Select Media Folders" if self._sync_available else "Media Folders"
         )
@@ -3750,6 +3755,38 @@ class PCFolderDialog(QDialog):
         except TypeError:
             return {str(raw)}
 
+    # ── Navidrome helpers ───────────────────────────────────────────────
+
+    def _check_navidrome_in_folders(self) -> bool:
+        """Return True if the Navidrome cache dir is already in ``_folders``."""
+        if not self._navidrome_cache_dir:
+            return False
+        cache_key = self._folder_key(self._navidrome_cache_dir)
+        return any(
+            cache_key == self._folder_key(self._entry_directory(e))
+            for e in self._folders
+        )
+
+    def _on_navidrome_toggle(self, checked: bool) -> None:
+        if not self._navidrome_cache_dir:
+            return
+        if checked:
+            # Ensure the cache dir exists for validation
+            os.makedirs(self._navidrome_cache_dir, exist_ok=True)
+            entry = {"directory": self._navidrome_cache_dir, "recurse": True,
+                     "media_types": ("music",)}
+            self._folders.append(entry)
+        else:
+            # Remove any entry matching the navidrome cache dir
+            cache_key = self._folder_key(self._navidrome_cache_dir)
+            self._folders = [
+                e for e in self._folders
+                if self._folder_key(self._entry_directory(e)) != cache_key
+            ]
+        self._navidrome_enabled = checked
+        self._emit_folders_changed()
+        self._render_folders()
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(14)
@@ -3776,6 +3813,45 @@ class PCFolderDialog(QDialog):
         label.setFont(QFont(FONT_FAMILY, Metrics.FONT_LG))
         label.setStyleSheet(f"color:{Colors.TEXT_SECONDARY}; background:transparent;")
         layout.addWidget(label)
+
+        # ── Navidrome toggle ────────────────────────────────────────────
+        self._navidrome_frame = QFrame(self)
+        self._navidrome_frame.setVisible(self._navidrome_available)
+        nf_style = f"""
+        QFrame {{
+            background: {Colors.SURFACE};
+            border: 1px solid {Colors.BORDER};
+            border-radius: {Metrics.BORDER_RADIUS_MD}px;
+            padding: 8px 12px;
+        }}
+        """
+        self._navidrome_frame.setStyleSheet(nf_style)
+        nf_layout = QHBoxLayout(self._navidrome_frame)
+        nf_layout.setContentsMargins(12, 8, 12, 8)
+        nf_layout.setSpacing(10)
+
+        self._navidrome_cb = QCheckBox("", self._navidrome_frame)
+        self._navidrome_cb.setChecked(self._navidrome_enabled)
+        self._navidrome_cb.toggled.connect(self._on_navidrome_toggle)
+        nf_layout.addWidget(self._navidrome_cb)
+
+        nf_icon_label = QLabel("📡", self._navidrome_frame)
+        nf_icon_label.setFont(QFont(FONT_FAMILY, Metrics.FONT_LG))
+        nf_icon_label.setStyleSheet("background:transparent; border:none;")
+        nf_layout.addWidget(nf_icon_label)
+
+        nf_text = QLabel("Include Navidrome Library", self._navidrome_frame)
+        nf_text.setFont(QFont(FONT_FAMILY, Metrics.FONT_MD, QFont.Weight.DemiBold))
+        nf_text.setStyleSheet("background:transparent; border:none;")
+        nf_layout.addWidget(nf_text, 1)
+
+        nf_sub = QLabel("Music hosted on your Navidrome server", self._navidrome_frame)
+        nf_sub.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        nf_sub.setStyleSheet(
+        f"background:transparent; border:none; color:{Colors.TEXT_TERTIARY};"
+        )
+        nf_layout.addWidget(nf_sub)
+        layout.addWidget(self._navidrome_frame)
 
         summary_row = QHBoxLayout()
         self.summary_label = QLabel(self)
@@ -4016,6 +4092,10 @@ class PCFolderDialog(QDialog):
             path_label.setStyleSheet(
                 f"color:{Colors.TEXT_PRIMARY}; border:none; padding-left: 4px;"
             )
+            # Friendly display for Navidrome cache
+            if self._navidrome_cache_dir and self._folder_key(folder) == self._folder_key(self._navidrome_cache_dir):
+                path_label.setText("📡  Navidrome Library")
+                path_label.setToolTip(folder)
             header_layout.addWidget(path_label, 1)
 
             settings_btn = self._make_folder_icon_button(
@@ -4127,12 +4207,19 @@ class PCFolderDialog(QDialog):
 
     def _remove_folder(self, folder: str):
         key = self._folder_key(folder)
+        is_navidrome = bool(
+            self._navidrome_cache_dir
+            and key == self._folder_key(self._navidrome_cache_dir)
+        )
         self._folders = [
             existing
             for existing in self._folders
             if self._folder_key(self._entry_directory(existing)) != key
         ]
         self._expanded_folder_keys.discard(key)
+        if is_navidrome:
+            self._navidrome_enabled = False
+            self._navidrome_cb.setChecked(False)
         self._emit_folders_changed()
         self._render_folders()
 

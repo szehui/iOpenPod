@@ -172,6 +172,27 @@ class NavidromeClient:
         params["id"] = song_id
         return f"{self.url}/rest/stream.view?{urlencode(params)}"
 
+    def get_song_list(
+        self,
+        *,
+        size: int = 500,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Return songs via getSongList (a flat, paginated endpoint).
+
+        Uses the Subsonic ``getSongList`` (not via albums). Falls back to
+        the ``alphabeticalByTitle`` list type.
+        """
+        sr = self._get("getSongList", {
+            "type": "alphabeticalByTitle",
+            "size": str(size),
+            "offset": str(offset),
+        })
+        song_list = sr.get("songList", {}).get("song", [])
+        if isinstance(song_list, dict):
+            song_list = [song_list]
+        return song_list
+
 
 class NavidromeLibrary:
     """Downloads a Navidrome library into a local cache directory.
@@ -189,15 +210,36 @@ class NavidromeLibrary:
     ) -> None:
         self.client = NavidromeClient(url, username, password)
         self.cache_dir = cache_dir
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    # ── song listing ─────────────────────────────────────────────────────────
+
+    def get_all_songs(self) -> list[dict[str, Any]]:
+        """Fetch every song from the client."""
+        return self.client.get_all_songs()
+
+    # ── sync / download ──────────────────────────────────────────────────────
 
     def sync(self, progress_callback=None) -> None:
         """Download all tracks from Navidrome that aren't already cached."""
         os.makedirs(self.cache_dir, exist_ok=True)
-        songs = self.client.get_all_songs()
+        songs = self.get_all_songs()
+        if not songs:
+            logger.warning("NavidromeLibrary: no songs returned from API")
+            return
+
         total = len(songs)
+        logger.info("NavidromeLibrary: syncing %d song(s) to %s", total, self.cache_dir)
+        downloaded = skipped = failed = 0
 
         for i, song in enumerate(songs):
-            sid = song.get("id", "")
+            if self._cancelled:
+                break
+
+            sid = song.get("id")
             if not sid:
                 continue
 
@@ -213,25 +255,37 @@ class NavidromeLibrary:
                 except (ValueError, TypeError):
                     expected_size = 0
 
-            need_download = True
             if os.path.isfile(filepath):
                 try:
                     actual = os.path.getsize(filepath)
                     if expected_size and actual == expected_size:
-                        need_download = False
+                        skipped += 1
+                        if progress_callback:
+                            progress_callback(downloaded + skipped + failed, total, os.path.basename(filepath))
+                        continue
                 except OSError:
-                    pass
+                    pass  # treat as missing/broken -> will download
 
-            if need_download:
-                url = self.client.stream_url(sid)
-                self._download_file(url, filepath, expected_size)
+            url = self.client.stream_url(sid)
+            success = self._download_file(url, filepath, expected_size)
+            if success:
+                downloaded += 1
+            else:
+                failed += 1
 
             if progress_callback:
-                progress_callback(i + 1, total, song.get("title", sid))
+                progress_callback(downloaded + skipped + failed, total, os.path.basename(filepath))
+
+        logger.info(
+            "NavidromeLibrary: sync complete — %d downloaded, %d skipped, %d failed",
+            downloaded,
+            skipped,
+            failed,
+        )
 
     @staticmethod
-    def _download_file(url: str, dest: str, expected_size: int) -> None:
-        """Stream *url* to *dest*. Overwrites on error."""
+    def _download_file(url: str, dest: str, expected_size: int) -> bool:
+        """Stream *url* to *dest*. Returns True on success."""
         import requests
 
         try:
@@ -241,9 +295,11 @@ class NavidromeLibrary:
                     for chunk in r.iter_content(8192):
                         if chunk:
                             f.write(chunk)
+            return True
         except Exception:
             logger.exception(f"Failed to download {url}")
             try:
                 os.remove(dest)
             except OSError:
                 pass
+            return False

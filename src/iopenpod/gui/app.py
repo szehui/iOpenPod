@@ -39,6 +39,7 @@ from iopenpod.application.device_identity import (
     refresh_device_disk_usage,
     resolve_device_image_filename,
 )
+from iopenpod.infrastructure.settings_paths import default_data_dir
 from iopenpod.device.recovery import (
     LinuxFilesystemRecoveryPlan,
     linux_filesystem_recovery_plan,
@@ -2053,10 +2054,18 @@ class MainWindow(QMainWindow):
         has_device = bool(device.device_path)
 
         # Show folder selection dialog
+        gs = self.settings_service.get_effective_settings()
+        nd_url = getattr(gs, "navidrome_url", "").strip()
+        nd_user = getattr(gs, "navidrome_username", "").strip()
+        nd_pass = getattr(gs, "navidrome_password", "")
+        navidrome_available = bool(nd_url and nd_user and nd_pass)
+        navidrome_cache_dir = str(Path(default_data_dir()) / "navidrome-cache")
         dialog = PCFolderDialog(
             self,
             self._last_pc_folder_entries,
             sync_available=has_device,
+            navidrome_available=navidrome_available,
+            navidrome_cache_dir=navidrome_cache_dir,
         )
         dialog.foldersChanged.connect(self._persist_pc_folder_entries)
         if dialog.exec() != dialog.DialogCode.Accepted:

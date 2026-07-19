@@ -38,6 +38,23 @@ from .sync_options import build_transcode_options
 
 logger = logging.getLogger(__name__)
 
+def _dir_matches(folder_entry: str | dict, target: str) -> bool:
+    """Return True if *folder_entry* (string or dict with "directory") refers to *target*."""
+    path: str
+    if isinstance(folder_entry, dict):
+        path = str(folder_entry.get("directory", "") or "")
+    else:
+        path = folder_entry
+    if not path:
+        return False
+    try:
+        return os.path.samefile(os.path.abspath(path), os.path.abspath(target))
+    except (FileNotFoundError, OSError):
+        return os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(target))
+
+
+# ── Intent / DTO ────────────────────────────────────────────────────────────
+
 SyncPlanningMode = Literal["full", "selective"]
 
 
@@ -304,38 +321,27 @@ class SyncSessionController(QObject):
 
         pc_folders = list(folder_entries)  # start with configured PC folders
 
-        # Optional Navidrome source
-        navidrome_url = getattr(settings, "navidrome_url", "").strip()
-        navidrome_username = getattr(settings, "navidrome_username", "").strip()
-        navidrome_password = getattr(settings, "navidrome_password", "")
-        if navidrome_url and navidrome_username and navidrome_password:
-            logger.info(
-                "Navidrome credentials found for %s (user: %s); starting sync",
-                navidrome_url, navidrome_username,
-            )
-            try:
-                from iopenpod.sync.navidrome_library import NavidromeLibrary
+        # Navidrome: only sync if user explicitly added the cache to their folder list
+        navidrome_cache = os.path.abspath(os.path.join(default_data_dir(), "navidrome-cache"))
+        if any(_dir_matches(f, navidrome_cache) for f in pc_folders):
+            settings = self._settings_service.get_effective_settings()
+            nd_url = getattr(settings, "navidrome_url", "").strip()
+            nd_user = getattr(settings, "navidrome_username", "").strip()
+            nd_pass = getattr(settings, "navidrome_password", "")
+            if nd_url and nd_user and nd_pass:
+                try:
+                    from iopenpod.sync.navidrome_library import NavidromeLibrary
 
-                cache_base = getattr(settings, "settings_dir", "") or default_data_dir()
-                lib = NavidromeLibrary(
-                    navidrome_url,
-                    navidrome_username,
-                    navidrome_password,
-                    cache_dir=os.path.join(cache_base, "navidrome-cache"),
-                )
-                lib.sync()  # ensure cache is up-to-date
-                navidrome_cache = os.path.abspath(lib.cache_dir)
-                if navidrome_cache not in pc_folders:
-                    pc_folders.append(navidrome_cache)
+                    lib = NavidromeLibrary(nd_url, nd_user, nd_pass, navidrome_cache)
+                    lib.sync()
                     logger.info("Navidrome library synced to %s", navidrome_cache)
-            except Exception:
-                logger.exception("Failed to sync Navidrome library; skipping")
-        else:
-            logger.debug(
-                "Navidrome not configured (url=%s, user=%s); skipping",
-                navidrome_url or "(empty)",
-                navidrome_username or "(empty)",
-            )
+                except Exception:
+                    logger.exception("Failed to sync Navidrome library; skipping")
+            else:
+                logger.warning(
+                    "Navidrome cache in folder list but credentials missing — "
+                    "set them in Settings > Navidrome"
+                )
 
         device_session = self._device_sessions.current_session()
         caps = device_session.capabilities

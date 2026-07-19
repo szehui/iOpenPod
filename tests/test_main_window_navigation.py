@@ -619,12 +619,16 @@ def test_start_pc_sync_without_device_opens_media_folder_dialog(monkeypatch) -> 
             folder_entries: object,
             *,
             sync_available: bool,
+            navidrome_available: bool = False,
+            navidrome_cache_dir: str = "",
         ) -> None:
             calls.append(
                 {
                     "parent": parent,
                     "folder_entries": folder_entries,
                     "sync_available": sync_available,
+                    "navidrome_available": navidrome_available,
+                    "navidrome_cache_dir": navidrome_cache_dir,
                 }
             )
             self.foldersChanged = _FakeSignal()
@@ -655,6 +659,9 @@ def test_start_pc_sync_without_device_opens_media_folder_dialog(monkeypatch) -> 
 
     MainWindow.startPCSync(cast(Any, window))
 
+    assert calls[0].pop("navidrome_available") is False
+    nd_path = calls[0].pop("navidrome_cache_dir")
+    assert nd_path.endswith("/navidrome-cache")
     assert calls[0] == {
         "parent": window,
         "folder_entries": entries,
