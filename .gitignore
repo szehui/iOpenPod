@@ -186,4 +186,5 @@ cython_debug/
 .claude/
 CLAUDE.md
 .agents/
-.codex/
+.codex/DEVLOG.md
+PLAN.md
