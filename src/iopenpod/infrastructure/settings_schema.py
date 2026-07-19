@@ -280,6 +280,7 @@ class AppSettings:
     navidrome_url: str = ""
     navidrome_username: str = ""
     navidrome_password: str = ""
+    navidrome_cache_dir: str = ""
 
     backup_before_sync: bool = True
     backup_before_sync_mode: str = ""

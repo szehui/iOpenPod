@@ -2059,7 +2059,9 @@ class MainWindow(QMainWindow):
         nd_user = getattr(gs, "navidrome_username", "").strip()
         nd_pass = getattr(gs, "navidrome_password", "")
         navidrome_available = bool(nd_url and nd_user and nd_pass)
-        navidrome_cache_dir = str(Path(default_data_dir()) / "navidrome-cache")
+        nd_cache = getattr(gs, "navidrome_cache_dir", "").strip()
+        from iopenpod.infrastructure.settings_paths import default_navidrome_cache_dir
+        navidrome_cache_dir = nd_cache or default_navidrome_cache_dir()
         dialog = PCFolderDialog(
             self,
             self._last_pc_folder_entries,

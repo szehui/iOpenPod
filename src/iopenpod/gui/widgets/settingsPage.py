@@ -1968,6 +1968,8 @@ class SettingsPage(QWidget):
         )
 
     def _build_navidrome_page(self) -> QScrollArea:
+        from iopenpod.infrastructure.settings_paths import default_navidrome_cache_dir
+
         self.navidrome_creds_row = _NavidromeCredsRow(
             "Navidrome / Subsonic",
             "Enter your Navidrome server URL, username, and password to sync your music library.",
@@ -1984,12 +1986,24 @@ class SettingsPage(QWidget):
             padding: 12px;
         """)
 
+        self.navidrome_cache_dir = ResettableFolderRow(
+            "Cache Directory",
+            "Where Navidrome tracks are cached before transfer to the iPod. "
+            "Use a location with plenty of free space.",
+            default_label="Platform default",
+            resolve_default_fn=default_navidrome_cache_dir,
+        )
+
         return self._make_page(
             "Navidrome",
             "Connection",
             _SettingsCard(
                 self.navidrome_creds_row,
                 self.navidrome_status_label,
+            ),
+            "Storage",
+            _SettingsCard(
+                self.navidrome_cache_dir,
             ),
         )
 
@@ -2305,6 +2319,8 @@ class SettingsPage(QWidget):
         else:
             self.navidrome_creds_row.set_disconnected()
 
+        self.navidrome_cache_dir.value = s.navidrome_cache_dir
+
         self.show_art.value = s.show_art_in_tracklist
         self.rounded_artwork.value = s.rounded_artwork
         self.sharpen_artwork.value = s.sharpen_artwork
@@ -2556,6 +2572,7 @@ class SettingsPage(QWidget):
             self.ffmpeg_path.changed.connect(self._save_and_refresh_tools)
             self.fpcalc_path.changed.connect(self._save_and_refresh_tools)
             self.backup_dir.changed.connect(self._save)
+            self.navidrome_cache_dir.changed.connect(self._save)
             self.backup_before_sync.changed.connect(self._save)
             self.max_backups.changed.connect(self._save)
             self.scrobble_on_sync.changed.connect(self._save)
@@ -2803,6 +2820,7 @@ class SettingsPage(QWidget):
             s.ffmpeg_path = self.ffmpeg_path.value
             s.fpcalc_path = self.fpcalc_path.value
             s.backup_dir = self.backup_dir.value
+            s.navidrome_cache_dir = self.navidrome_cache_dir.value
         backup_mode = _BACKUP_BEFORE_SYNC_BY_TEXT.get(
             self.backup_before_sync.value,
             BACKUP_BEFORE_SYNC_AUTO,

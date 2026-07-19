@@ -81,3 +81,8 @@ def get_settings_path() -> str:
     """Return the active settings JSON path."""
 
     return os.path.join(get_settings_dir(), "settings.json")
+
+
+def default_navidrome_cache_dir() -> str:
+    """Default cache directory for Navidrome downloads."""
+    return os.path.join(default_data_dir(), "navidrome-cache")

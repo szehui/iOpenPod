@@ -322,7 +322,9 @@ class SyncSessionController(QObject):
         pc_folders = list(folder_entries)  # start with configured PC folders
 
         # Navidrome: check if cache dir is in folder list; stash config for the worker thread
-        navidrome_cache = os.path.abspath(os.path.join(default_data_dir(), "navidrome-cache"))
+        nd_cache_override = getattr(settings, "navidrome_cache_dir", "").strip()
+        from iopenpod.infrastructure.settings_paths import default_navidrome_cache_dir
+        navidrome_cache = nd_cache_override or default_navidrome_cache_dir()
         navidrome_url = ""
         navidrome_username = ""
         navidrome_password = ""

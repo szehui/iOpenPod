@@ -2535,9 +2535,9 @@ class SelectiveSyncBrowser(QWidget):
 
         # Build navidrome config for the background worker (if cache dir is in folder list)
         navidrome_config: dict = {}
-        navidrome_cache_path = os.path.abspath(
-            os.path.join(default_data_dir(), "navidrome-cache")
-        )
+        nd_cache_override = getattr(settings, "navidrome_cache_dir", "").strip()
+        from iopenpod.infrastructure.settings_paths import default_navidrome_cache_dir
+        navidrome_cache_path = nd_cache_override or default_navidrome_cache_dir()
         if any(
             _path_matches_navidrome_cache(f, navidrome_cache_path)
             for f in self._folder_entries
