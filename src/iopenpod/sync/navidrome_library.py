@@ -109,11 +109,13 @@ class NavidromeClient:
             "size": str(size),
             "offset": str(offset),
         })
-        album_list = sr.get("albumList2", {}) if "albumList2" in sr else sr.get("albumList", {})
+        container = sr.get("albumList2") if "albumList2" in sr else sr.get("albumList")
+        if isinstance(container, dict):
+            album_list = container.get("album", [])
+        else:
+            album_list = container if isinstance(container, list) else []
         if isinstance(album_list, dict):
             album_list = [album_list]
-        if not album_list:
-            return []
         return album_list
 
     def get_all_albums(self) -> list[dict[str, Any]]:
