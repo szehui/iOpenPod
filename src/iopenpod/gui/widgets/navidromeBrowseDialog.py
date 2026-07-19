@@ -13,7 +13,6 @@ from PyQt6.QtGui import QColor, QFont, QPalette
 from PyQt6.QtWidgets import (
     QCheckBox,
     QDialog,
-    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -322,8 +321,11 @@ class NavidromeBrowseDialog(QDialog):
             check.stateChanged.connect(lambda state, aid=album_id: self._on_album_check_changed(aid, state))
             self._table.setCellWidget(row, 0, check)
 
-            title_widget = self._make_album_title_widget(album_title, album_artist, track_count)
-            self._table.setCellWidget(row, 1, title_widget)
+            # Title column — use QTableWidgetItem for reliable rendering
+            expand_indicator = "▶ " if track_count > 0 else ""
+            title_item = QTableWidgetItem(f"{expand_indicator}{album_title}")
+            title_item.setFlags(title_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._table.setItem(row, 1, title_item)
 
             # Artist column
             artist_item = QTableWidgetItem(album_artist)
@@ -345,28 +347,6 @@ class NavidromeBrowseDialog(QDialog):
                 row += len(tracks)
 
         self._update_selection_label()
-
-    def _make_album_title_widget(self, title: str, artist: str, track_count: int) -> QWidget:
-        w = QWidget()
-        layout = QHBoxLayout(w)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(6)
-
-        expand_btn = QPushButton("▶" if track_count > 0 else "")
-        expand_btn.setFixedSize(24, 24)
-        expand_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: none; "
-            f"color: {Colors.TEXT_SECONDARY}; font-size: 10px; }} "
-            "QPushButton:hover { color: #aaa; }"
-        )
-        expand_btn.clicked.connect(self._on_expand_clicked)
-        layout.addWidget(expand_btn)
-
-        text = QLabel(f"<b>{title}</b>")
-        text.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
-        layout.addWidget(text, 1)
-
-        return w
 
     def _insert_album_tracks(self, album: dict, start_row: int) -> None:
         tracks = album.get("_tracks", [])
@@ -448,10 +428,6 @@ class NavidromeBrowseDialog(QDialog):
         else:
             self._expanded_albums.add(album_id)
         self._rebuild_table(self._search_input.text() if self._search_input else "")
-
-    def _on_expand_clicked(self) -> None:
-        """Handled via _on_cell_clicked — button clicks cascade to row click."""
-        pass
 
     def _apply_search_filter(self) -> None:
         text = self._search_input.text() if self._search_input else ""
