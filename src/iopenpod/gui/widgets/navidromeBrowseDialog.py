@@ -160,8 +160,8 @@ class NavidromeBrowseDialog(QDialog):
         outer.addWidget(self._loading_label)
 
         # Album/ track table
-        self._table = QTableWidget(0, 3)
-        self._table.setHorizontalHeaderLabels(["", "Title", "Duration"])
+        self._table = QTableWidget(0, 4)
+        self._table.setHorizontalHeaderLabels(["", "Title", "Artist", "Duration"])
         self._table.setStyleSheet(table_css())
         self._table.setAlternatingRowColors(True)
         self._table.verticalHeader().setVisible(False)
@@ -171,6 +171,7 @@ class NavidromeBrowseDialog(QDialog):
         self._table.setColumnWidth(0, 40)
         header_view.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header_view.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header_view.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._table.cellClicked.connect(self._on_cell_clicked)
         outer.addWidget(self._table, 1)
@@ -236,6 +237,11 @@ class NavidromeBrowseDialog(QDialog):
 
     def _on_albums_loaded(self, albums: list[dict]) -> None:
         self._albums = albums
+        # Compute total duration for each album from the already-loaded tracks
+        for album in self._albums:
+            tracks = album.get("_tracks", [])
+            total_seconds = sum(t.get("duration", 0) for t in tracks)
+            album["_total_duration"] = total_seconds
         self._loading_label.setVisible(False)
         self._table.setVisible(True)
         self._rebuild_table()
@@ -256,7 +262,8 @@ class NavidromeBrowseDialog(QDialog):
         row = 0
         for album in self._albums:
             album_id = album["id"]
-            album_title = album.get("title", "Unknown Album")
+            # Subsonic API uses 'name' for album title, 'title' for individual track titles
+            album_title = album.get("name", album.get("title", "Unknown Album"))
             album_artist = album.get("artist", "Unknown Artist")
             track_count = album.get("_track_count", 0)
 
@@ -278,9 +285,14 @@ class NavidromeBrowseDialog(QDialog):
             title_widget = self._make_album_title_widget(album_title, album_artist, track_count)
             self._table.setCellWidget(row, 1, title_widget)
 
+            # Artist column
+            artist_item = QTableWidgetItem(album_artist)
+            artist_item.setFlags(artist_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._table.setItem(row, 2, artist_item)
+
             duration_item = QTableWidgetItem(f"{track_count} tracks")
             duration_item.setFlags(duration_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._table.setItem(row, 2, duration_item)
+            self._table.setItem(row, 3, duration_item)
 
             self._album_rows[row] = album_id
             row += 1
@@ -310,7 +322,7 @@ class NavidromeBrowseDialog(QDialog):
         expand_btn.clicked.connect(self._on_expand_clicked)
         layout.addWidget(expand_btn)
 
-        text = QLabel(f"<b>{title}</b> — {artist}")
+        text = QLabel(f"<b>{title}</b>")
         text.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; background: transparent;")
         layout.addWidget(text, 1)
 
@@ -337,11 +349,17 @@ class NavidromeBrowseDialog(QDialog):
             title_item.setFlags(title_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._table.setItem(r, 1, title_item)
 
+            # Artist (may differ from album artist on compilations)
+            track_artist = track.get("artist", "")
+            artist_item = QTableWidgetItem(track_artist)
+            artist_item.setFlags(artist_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._table.setItem(r, 2, artist_item)
+
             duration_sec = track.get("duration", 0)
             duration_str = f"{int(duration_sec // 60)}:{int(duration_sec % 60):02d}" if duration_sec else ""
             dur_item = QTableWidgetItem(duration_str)
             dur_item.setFlags(dur_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._table.setItem(r, 2, dur_item)
+            self._table.setItem(r, 3, dur_item)
 
             self._track_rows[r] = track
 
