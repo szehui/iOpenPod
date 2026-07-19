@@ -15,6 +15,7 @@ from iopenpod.infrastructure.media_folders import (
     media_folder_entries_to_settings,
     media_folder_paths,
 )
+from iopenpod.infrastructure.settings_paths import default_data_dir
 
 from .jobs import (
     PodcastPlanRequest,
@@ -308,22 +309,33 @@ class SyncSessionController(QObject):
         navidrome_username = getattr(settings, "navidrome_username", "").strip()
         navidrome_password = getattr(settings, "navidrome_password", "")
         if navidrome_url and navidrome_username and navidrome_password:
+            logger.info(
+                "Navidrome credentials found for %s (user: %s); starting sync",
+                navidrome_url, navidrome_username,
+            )
             try:
                 from iopenpod.sync.navidrome_library import NavidromeLibrary
 
+                cache_base = getattr(settings, "settings_dir", "") or default_data_dir()
                 lib = NavidromeLibrary(
                     navidrome_url,
                     navidrome_username,
                     navidrome_password,
-                    cache_dir=os.path.join(getattr(settings, "settings_dir", ""), "navidrome-cache"),
+                    cache_dir=os.path.join(cache_base, "navidrome-cache"),
                 )
                 lib.sync()  # ensure cache is up-to-date
-                navidrome_cache = lib.cache_dir
-                if navidrome_cache and navidrome_cache not in pc_folders:
+                navidrome_cache = os.path.abspath(lib.cache_dir)
+                if navidrome_cache not in pc_folders:
                     pc_folders.append(navidrome_cache)
                     logger.info("Navidrome library synced to %s", navidrome_cache)
             except Exception:
                 logger.exception("Failed to sync Navidrome library; skipping")
+        else:
+            logger.debug(
+                "Navidrome not configured (url=%s, user=%s); skipping",
+                navidrome_url or "(empty)",
+                navidrome_username or "(empty)",
+            )
 
         device_session = self._device_sessions.current_session()
         caps = device_session.capabilities
