@@ -1,5 +1,5 @@
-"""NavidromeBrowseDialog — browse albums/tracks on the Navidrome server
-and select which tracks to sync to the iPod.
+"""NavidromeBrowseDialog — browse Navidrome albums grouped by artist
+with lazy-loaded track details.
 """
 
 from __future__ import annotations
@@ -38,7 +38,8 @@ from ..styles import (
 
 logger = logging.getLogger(__name__)
 
-_INDENT = "    "  # 4 spaces for track nesting
+_ALBUM_INDENT = "    "
+_TRACK_INDENT = "        "
 
 
 class _NavidromeAlbumLoader(QObject):
@@ -65,7 +66,6 @@ class _NavidromeAlbumLoader(QObject):
 
             client = NavidromeClient(self._url, self._username, self._password)
             albums = client.get_all_albums()
-            # getAlbumList2 already returns songCount per album — no extra calls needed
             self.finished.emit(albums)
         except Exception as exc:
             logger.exception("Failed to load Navidrome albums")
@@ -75,8 +75,8 @@ class _NavidromeAlbumLoader(QObject):
 class _NavidromeTrackLoader(QObject):
     """Background worker to fetch tracks for a single album."""
 
-    finished = pyqtSignal(str, list)  # album_id, list of tracks
-    error = pyqtSignal(str, str)  # album_id, error message
+    finished = pyqtSignal(str, list)
+    error = pyqtSignal(str, str)
 
     def __init__(
         self,
@@ -106,7 +106,9 @@ class _NavidromeTrackLoader(QObject):
 
 
 class NavidromeBrowseDialog(QDialog):
-    """Modal dialog to browse Navidrome albums and select tracks for sync."""
+    """Modal dialog to browse Navidrome albums grouped by artist,
+    expand albums to select individual tracks.
+    """
 
     def __init__(
         self,
@@ -115,13 +117,18 @@ class NavidromeBrowseDialog(QDialog):
     ):
         super().__init__(parent)
         self._settings_service = settings_service
-        self._albums: list[dict] = []  # Full list of albums from Navidrome
+        self._albums: list[dict] = []
+        self._artist_groups: list[dict] = []  # [{name, album_indices: [int]}]
         self._selected_ids: set[str] = set()
-        self._album_rows: dict[int, int] = {}  # table row -> album index in self._albums
-        self._expanded_albums: set[str] = set()  # album IDs that are expanded
-        self._track_cache: dict[str, list[dict]] = {}  # album_id -> list of tracks (lazy-loaded)
-        self._track_rows: dict[int, dict] = {}  # table row -> track info
-        self._album_track_rows: dict[str, list[int]] = {}  # album_id -> list of track row indices
+        self._expanded_artists: set[str] = set()
+        self._expanded_albums: set[str] = set()
+        self._loading_albums: set[str] = set()
+        self._track_cache: dict[str, list[dict]] = {}
+
+        # Row tracking for click handling (rebuilt each time)
+        self._artist_rows: dict[int, str] = {}
+        self._album_rows: dict[int, int] = {}
+
         self._table: QTableWidget | None = None
         self._search_input: QLineEdit | None = None
         self._selection_label: QLabel | None = None
@@ -141,27 +148,37 @@ class NavidromeBrowseDialog(QDialog):
         self._load_selected_ids()
         self._start_loading_albums()
 
+    # ---- UI construction ----
+
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 16)
         outer.setSpacing(12)
 
-        # Header
         header = QLabel("Select tracks from your Navidrome library to sync to the iPod.")
         header.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
         header.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         header.setWordWrap(True)
         outer.addWidget(header)
 
-        # Toolbar: search + select all / deselect all
         toolbar = QHBoxLayout()
         toolbar.setSpacing(8)
 
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText("Search albums...")
+        self._search_input.setPlaceholderText("Search albums or artists...")
         self._search_input.setStyleSheet(input_css())
-        self._search_input.textChanged.connect(self._apply_search_filter)
+        self._search_input.textChanged.connect(self._on_search_changed)
         toolbar.addWidget(self._search_input, 1)
+
+        expand_all_btn = QPushButton("Expand All")
+        expand_all_btn.setStyleSheet(btn_css())
+        expand_all_btn.clicked.connect(self._expand_all)
+        toolbar.addWidget(expand_all_btn)
+
+        collapse_all_btn = QPushButton("Collapse All")
+        collapse_all_btn.setStyleSheet(btn_css())
+        collapse_all_btn.clicked.connect(self._collapse_all)
+        toolbar.addWidget(collapse_all_btn)
 
         select_all_btn = QPushButton("Select All")
         select_all_btn.setStyleSheet(btn_css())
@@ -180,9 +197,8 @@ class NavidromeBrowseDialog(QDialog):
         self._loading_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY}; padding: 32px;")
         outer.addWidget(self._loading_label)
 
-        # Album/track table
         self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["", "Title", "Artist", "Duration"])
+        self._table.setHorizontalHeaderLabels(["", "Title", "Year", "Tracks"])
         self._table.setStyleSheet(table_css())
         self._table.setAlternatingRowColors(True)
         self._table.verticalHeader().setVisible(False)
@@ -197,12 +213,10 @@ class NavidromeBrowseDialog(QDialog):
         self._table.cellClicked.connect(self._on_cell_clicked)
         outer.addWidget(self._table, 1)
 
-        # Selection summary
         self._selection_label = QLabel("0 tracks selected")
         self._selection_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         outer.addWidget(self._selection_label)
 
-        # Buttons
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
         buttons.addStretch()
@@ -220,8 +234,9 @@ class NavidromeBrowseDialog(QDialog):
 
         outer.addLayout(buttons)
 
+    # ---- Data loading ----
+
     def _load_selected_ids(self) -> None:
-        """Load previously selected IDs from settings."""
         try:
             s = self._settings_service.get_global_settings()
             raw = getattr(s, "navidrome_selected_ids", "").strip()
@@ -233,7 +248,6 @@ class NavidromeBrowseDialog(QDialog):
             self._selected_ids = set()
 
     def _start_loading_albums(self) -> None:
-        """Kick off background album loading (album list only, no tracks)."""
         s = self._settings_service.get_global_settings()
         url = s.navidrome_url.strip()
         username = s.navidrome_username.strip()
@@ -254,7 +268,6 @@ class NavidromeBrowseDialog(QDialog):
         self._loader_thread.start()
 
     def _on_albums_loaded(self, albums: list[dict]) -> None:
-        # Sort albums by artist (case-insensitive), then by album title
         self._albums = sorted(
             albums,
             key=lambda a: (
@@ -262,27 +275,31 @@ class NavidromeBrowseDialog(QDialog):
                 a.get("name", a.get("title", "")).lower(),
             ),
         )
-
-        # Pre-select tracks that are already cached on the iPod
+        self._build_artist_groups()
         self._preselect_cached_tracks()
-
         self._loading_label.setVisible(False)
         self._table.setVisible(True)
         self._build_table_from_scratch()
+
+    def _build_artist_groups(self) -> None:
+        self._artist_groups = []
+        for idx, album in enumerate(self._albums):
+            artist = album.get("artist", "Unknown Artist")
+            if not self._artist_groups or self._artist_groups[-1]["name"] != artist:
+                self._artist_groups.append({"name": artist, "album_indices": []})
+            self._artist_groups[-1]["album_indices"].append(idx)
 
     def _on_load_error(self, error: str) -> None:
         self._loading_label.setText(f"Error loading albums: {error}")
         self._loading_label.setStyleSheet(f"color: {Colors.DANGER}; padding: 32px;")
 
     def _preselect_cached_tracks(self) -> None:
-        """Pre-select tracks that already exist in the local cache directory."""
         s = self._settings_service.get_global_settings()
         from iopenpod.infrastructure.settings_paths import default_navidrome_cache_dir
 
         cache_dir = s.navidrome_cache_dir.strip() or default_navidrome_cache_dir()
         if not os.path.isdir(cache_dir):
             return
-
         try:
             cached = set()
             for fname in os.listdir(cache_dir):
@@ -292,73 +309,142 @@ class NavidromeBrowseDialog(QDialog):
                 stem, _ = os.path.splitext(fname)
                 if stem:
                     cached.add(stem)
-            # We don't have track IDs yet (lazy-loaded), so we can only pre-select
-            # based on the cache overlay. Without album tracks loaded, we can't
-            # match against the library. This will be refined when tracks are loaded.
-            # For now: mark cached IDs as selected (they'll be reconciled on expand).
-            # Any cached IDs that don't appear in any album are harmless noise.
             self._selected_ids.update(cached)
         except (OSError, PermissionError):
-            logger.warning("Could not scan Navidrome cache dir for pre-selection", exc_info=True)
+            logger.warning("Could not scan Navidrome cache dir", exc_info=True)
+
+    # ---- Table building ----
 
     def _build_table_from_scratch(self) -> None:
-        """Populate the table with albums (and track rows for expanded albums)."""
         self._table.setRowCount(0)
+        self._artist_rows.clear()
         self._album_rows.clear()
-        self._track_rows.clear()
-        self._album_track_rows.clear()
 
-        filter_text = self._search_input.text() if self._search_input else ""
-        filter_lower = filter_text.strip().lower() if filter_text else ""
+        filter_text = self._search_input.text().strip().lower() if self._search_input else ""
 
         row = 0
-        for idx, album in enumerate(self._albums):
-            album_id = album["id"]
-            album_title = album.get("name", album.get("title", "Unknown Album"))
-            album_artist = album.get("artist", "Unknown Artist")
-            song_count = album.get("songCount", 0)
+        for group in self._artist_groups:
+            artist_name = group["name"]
 
-            # Apply search filter
-            if filter_lower and filter_lower not in album_title.lower() and filter_lower not in album_artist.lower():
+            # Filter albums within this group
+            matched = []
+            for idx in group["album_indices"]:
+                album = self._albums[idx]
+                title = album.get("name", album.get("title", "")).lower()
+                artist = album.get("artist", "").lower()
+                if not filter_text or filter_text in title or filter_text in artist:
+                    matched.append(idx)
+
+            if not matched:
                 continue
 
-            # Album header row
+            # ---- Artist header row ----
             self._table.insertRow(row)
 
-            check = QCheckBox()
-            check.setChecked(self._all_album_tracks_selected(album))
-            check.stateChanged.connect(lambda state, aid=album_id: self._on_album_check_changed(aid, state))
-            self._table.setCellWidget(row, 0, check)
+            artist_check = QCheckBox()
+            artist_check.stateChanged.connect(
+                lambda state, name=artist_name: self._on_artist_check_changed(name, state)
+            )
+            self._set_artist_check_state(artist_check, matched)
+            self._table.setCellWidget(row, 0, artist_check)
 
-            expand_indicator = "▶ " if song_count > 0 else ""
-            title_item = QTableWidgetItem(f"{expand_indicator}{album_title}")
-            title_item.setFlags(title_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._table.setItem(row, 1, title_item)
+            is_expanded = artist_name in self._expanded_artists
+            indicator = "▼ " if is_expanded else "▶ "
+            name_item = QTableWidgetItem(f"{indicator}{artist_name}")
+            name_item.setData(Qt.ItemDataRole.FontRole, self._bold_font())
+            name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._table.setItem(row, 1, name_item)
 
-            artist_item = QTableWidgetItem(album_artist)
-            artist_item.setFlags(artist_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._table.setItem(row, 2, artist_item)
+            blank = QTableWidgetItem("")
+            blank.setFlags(blank.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._table.setItem(row, 2, blank)
 
-            dur_text = f"{song_count} tracks" if song_count else ""
-            duration_item = QTableWidgetItem(dur_text)
-            duration_item.setFlags(duration_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._table.setItem(row, 3, duration_item)
+            col3 = QTableWidgetItem(f"{len(matched)} albums")
+            col3.setFlags(col3.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._table.setItem(row, 3, col3)
 
-            self._album_rows[row] = idx
+            self._artist_rows[row] = artist_name
             row += 1
 
-            # If this album is expanded and we have cached tracks, show them
-            expanded = album_id in self._expanded_albums
-            if expanded and album_id in self._track_cache:
-                self._insert_album_tracks(album_id, row)
-                row += len(self._track_cache[album_id])
+            # ---- Album rows (if artist expanded) ----
+            if is_expanded:
+                for idx in matched:
+                    row = self._insert_album_row(row, idx)
 
         self._update_selection_label()
 
-    def _insert_album_tracks(self, album_id: str, start_row: int) -> None:
-        """Insert track rows for an album starting at start_row."""
+    def _bold_font(self) -> QFont:
+        f = QFont(FONT_FAMILY, Metrics.FONT_SM)
+        f.setBold(True)
+        return f
+
+    def _set_artist_check_state(self, check: QCheckBox, album_indices: list[int]) -> None:
+        any_tracks = False
+        all_selected = True
+        for idx in album_indices:
+            album_id = self._albums[idx]["id"]
+            tracks = self._track_cache.get(album_id, [])
+            if tracks:
+                any_tracks = True
+                if not all(t.get("id") in self._selected_ids for t in tracks if t.get("id")):
+                    all_selected = False
+                    break
+        check.setChecked(any_tracks and all_selected)
+
+    def _insert_album_row(self, row: int, album_idx: int) -> int:
+        """Insert one album row at *row*. Returns the next available row."""
+        album = self._albums[album_idx]
+        album_id = album["id"]
+        album_title = album.get("name", album.get("title", "Unknown Album"))
+        song_count = album.get("songCount", 0)
+
+        self._table.insertRow(row)
+
+        check = QCheckBox()
+        check.setChecked(self._all_album_tracks_selected(album_id))
+        check.stateChanged.connect(
+            lambda state, aid=album_id: self._on_album_check_changed(aid, state)
+        )
+        self._table.setCellWidget(row, 0, check)
+
+        is_expanded = album_id in self._expanded_albums
+        if is_expanded and album_id in self._track_cache:
+            exp_ind = "▼ "
+        elif song_count > 0:
+            exp_ind = "▶ "
+        else:
+            exp_ind = ""
+        title_item = QTableWidgetItem(f"{_ALBUM_INDENT}{exp_ind}{album_title}")
+        title_item.setFlags(title_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self._table.setItem(row, 1, title_item)
+
+        year = album.get("year", "")
+        year_item = QTableWidgetItem(str(year) if year else "")
+        year_item.setFlags(year_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self._table.setItem(row, 2, year_item)
+
+        if album_id in self._loading_albums:
+            dur_text = "loading..."
+        elif song_count:
+            dur_text = f"{song_count} tracks"
+        else:
+            dur_text = ""
+        dur_item = QTableWidgetItem(dur_text)
+        dur_item.setFlags(dur_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self._table.setItem(row, 3, dur_item)
+
+        self._album_rows[row] = album_idx
+        row += 1
+
+        # Track rows (if album expanded and cached)
+        if is_expanded and album_id in self._track_cache:
+            row = self._insert_track_rows(album_id, row)
+
+        return row
+
+    def _insert_track_rows(self, album_id: str, start_row: int) -> int:
+        """Insert track rows for album_id. Returns next available row."""
         tracks = self._track_cache.get(album_id, [])
-        track_rows = []
         for i, track in enumerate(tracks):
             r = start_row + i
             self._table.insertRow(r)
@@ -373,8 +459,8 @@ class NavidromeBrowseDialog(QDialog):
 
             title = track.get("title", "Untitled")
             track_num = track.get("track", "")
-            track_label = f"{_INDENT}{track_num}. {title}" if track_num else f"{_INDENT}{title}"
-            title_item = QTableWidgetItem(track_label)
+            label = f"{_TRACK_INDENT}{track_num}. {title}" if track_num else f"{_TRACK_INDENT}{title}"
+            title_item = QTableWidgetItem(label)
             title_item.setFlags(title_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._table.setItem(r, 1, title_item)
 
@@ -384,59 +470,128 @@ class NavidromeBrowseDialog(QDialog):
             self._table.setItem(r, 2, artist_item)
 
             duration_sec = track.get("duration", 0)
-            duration_str = f"{int(duration_sec // 60)}:{int(duration_sec % 60):02d}" if duration_sec else ""
+            duration_str = (
+                f"{int(duration_sec // 60)}:{int(duration_sec % 60):02d}"
+                if duration_sec
+                else ""
+            )
             dur_item = QTableWidgetItem(duration_str)
             dur_item.setFlags(dur_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             self._table.setItem(r, 3, dur_item)
 
-            self._track_rows[r] = track
-            track_rows.append(r)
-        if track_rows:
-            self._album_track_rows[album_id] = track_rows
+        return start_row + len(tracks)
 
-    def _remove_album_tracks(self, album_id: str) -> None:
-        """Remove track rows for an album given its album_id."""
-        rows_to_remove = self._album_track_rows.get(album_id, [])
-        for r in sorted(rows_to_remove, reverse=True):
-            self._table.removeRow(r)
-            if r in self._track_rows:
-                del self._track_rows[r]
-        if album_id in self._album_track_rows:
-            del self._album_track_rows[album_id]
-        # Update row indices for everything below the removed rows
-        if rows_to_remove:
-            self._shift_row_indices_after(min(rows_to_remove), -len(rows_to_remove))
+    # ---- Selection state helpers ----
 
-    def _shift_row_indices_after(self, start_row: int, delta: int) -> None:
-        """Adjust stored row indices after a given row by *delta*."""
-        new_album_rows = {}
-        for row, idx in self._album_rows.items():
-            nr = row + delta if row > start_row else row
-            new_album_rows[nr] = idx
-        self._album_rows = new_album_rows
-
-        new_track_rows = {}
-        for row, track in self._track_rows.items():
-            nr = row + delta if row > start_row else row
-            new_track_rows[nr] = track
-        self._track_rows = new_track_rows
-
-        for aid in list(self._album_track_rows.keys()):
-            self._album_track_rows[aid] = [
-                r + delta if r > start_row else r for r in self._album_track_rows[aid]
-            ]
-
-    def _all_album_tracks_selected(self, album: dict) -> bool:
-        album_id = album["id"]
+    def _all_album_tracks_selected(self, album_id: str) -> bool:
         tracks = self._track_cache.get(album_id, [])
         if not tracks:
             return False
-        return all(t["id"] in self._selected_ids for t in tracks if t.get("id"))
+        return all(t.get("id") in self._selected_ids for t in tracks if t.get("id"))
+
+    def _update_selection_label(self) -> None:
+        count = len(self._selected_ids)
+        self._selection_label.setText(f"{count} track{'s' if count != 1 else ''} selected")
+
+    # ---- Click handling ----
+
+    def _on_cell_clicked(self, row: int, col: int) -> None:
+        if col != 1:
+            return
+
+        # Artist header row?
+        artist_name = self._artist_rows.get(row)
+        if artist_name is not None:
+            self._toggle_artist(artist_name)
+            return
+
+        # Album header row?
+        album_idx = self._album_rows.get(row)
+        if album_idx is not None:
+            self._toggle_album(album_idx)
+
+    def _toggle_artist(self, artist_name: str) -> None:
+        if artist_name in self._expanded_artists:
+            self._expanded_artists.discard(artist_name)
+            group = next(g for g in self._artist_groups if g["name"] == artist_name)
+            for idx in group["album_indices"]:
+                self._expanded_albums.discard(self._albums[idx]["id"])
+        else:
+            self._expanded_artists.add(artist_name)
+        self._build_table_from_scratch()
+
+    def _toggle_album(self, album_idx: int) -> None:
+        album = self._albums[album_idx]
+        album_id = album["id"]
+        if album.get("songCount", 0) < 1:
+            return
+
+        if album_id in self._expanded_albums:
+            self._expanded_albums.discard(album_id)
+            self._build_table_from_scratch()
+        else:
+            self._expanded_albums.add(album_id)
+            if album_id in self._track_cache:
+                self._build_table_from_scratch()
+            else:
+                self._loading_albums.add(album_id)
+                self._build_table_from_scratch()
+                self._fetch_album_tracks(album_id)
+
+    # ---- Track fetching ----
+
+    def _fetch_album_tracks(self, album_id: str) -> None:
+        s = self._settings_service.get_global_settings()
+        loader = _NavidromeTrackLoader(
+            s.navidrome_url.strip(),
+            s.navidrome_username.strip(),
+            s.navidrome_password,
+            album_id,
+            parent=self,
+        )
+        thread = QThread(self)
+        loader.moveToThread(thread)
+        thread.started.connect(loader.run)
+        loader.finished.connect(self._on_tracks_loaded)
+        loader.error.connect(self._on_tracks_error)
+        loader.finished.connect(thread.quit)
+        loader.error.connect(thread.quit)
+        thread.finished.connect(thread.deleteLater)
+        thread.start()
+
+    def _on_tracks_loaded(self, album_id: str, songs: list[dict]) -> None:
+        self._track_cache[album_id] = songs
+        self._loading_albums.discard(album_id)
+        if album_id in self._expanded_albums:
+            self._build_table_from_scratch()
+
+    def _on_tracks_error(self, album_id: str, error: str) -> None:
+        self._loading_albums.discard(album_id)
+        self._expanded_albums.discard(album_id)
+        self._build_table_from_scratch()
+        logger.error("Failed to load tracks for album %s: %s", album_id, error)
+
+    # ---- Checkbox changes ----
+
+    def _on_artist_check_changed(self, artist_name: str, state: int) -> None:
+        checked = state == Qt.CheckState.Checked.value
+        group = next((g for g in self._artist_groups if g["name"] == artist_name), None)
+        if group is None:
+            return
+        for idx in group["album_indices"]:
+            album_id = self._albums[idx]["id"]
+            for track in self._track_cache.get(album_id, []):
+                sid = track.get("id")
+                if sid:
+                    if checked:
+                        self._selected_ids.add(sid)
+                    else:
+                        self._selected_ids.discard(sid)
+        self._update_selection_label()
 
     def _on_album_check_changed(self, album_id: str, state: int) -> None:
         checked = state == Qt.CheckState.Checked.value
-        tracks = self._track_cache.get(album_id, [])
-        for track in tracks:
+        for track in self._track_cache.get(album_id, []):
             sid = track.get("id")
             if sid:
                 if checked:
@@ -453,109 +608,22 @@ class NavidromeBrowseDialog(QDialog):
             self._selected_ids.discard(song_id)
         self._update_selection_label()
 
-    def _on_cell_clicked(self, row: int, col: int) -> None:
-        """Handle cell clicks — expand/collapse on album title column."""
-        if col != 1:
-            return
-        idx = self._album_rows.get(row)
-        if idx is None:
-            return
-        album = self._albums[idx]
-        album_id = album["id"]
-        song_count = album.get("songCount", 0)
-        if song_count < 1:
-            return
+    # ---- Toolbar actions ----
 
-        if album_id in self._expanded_albums:
-            self._expanded_albums.discard(album_id)
-            self._collapse_album(album_id)
-        else:
-            self._expanded_albums.add(album_id)
-            self._expand_album(album_id)
+    def _on_search_changed(self) -> None:
+        self._build_table_from_scratch()
 
-    def _expand_album(self, album_id: str) -> None:
-        """Expand an album. If tracks aren't cached yet, fetch them lazily."""
-        # Already cached — insert immediately
-        if album_id in self._track_cache:
-            # Find the album header row
-            start_row = self._find_album_row(album_id)
-            if start_row is None:
-                return
-            self._insert_album_tracks(album_id, start_row + 1)
-            num_tracks = len(self._track_cache[album_id])
-            self._shift_row_indices_after(start_row, num_tracks)
-            return
+    def _expand_all(self) -> None:
+        for group in self._artist_groups:
+            self._expanded_artists.add(group["name"])
+        self._build_table_from_scratch()
 
-        # Not cached — show a loading indicator in the duration column
-        header_row = self._find_album_row(album_id)
-        if header_row is not None:
-            dur_item = QTableWidgetItem("loading...")
-            dur_item.setFlags(dur_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._table.setItem(header_row, 3, dur_item)
-
-        # Fetch tracks in background
-        s = self._settings_service.get_global_settings()
-        url = s.navidrome_url.strip()
-        username = s.navidrome_username.strip()
-        password = s.navidrome_password
-
-        loader = _NavidromeTrackLoader(
-            url, username, password, album_id, parent=self
-        )
-        thread = QThread(self)
-        loader.moveToThread(thread)
-        thread.started.connect(loader.run)
-        loader.finished.connect(lambda aid, songs: self._on_tracks_loaded(aid, songs))
-        loader.error.connect(lambda aid, err: self._on_tracks_error(aid, err))
-        loader.finished.connect(thread.quit)
-        loader.error.connect(thread.quit)
-        thread.finished.connect(thread.deleteLater)
-        thread.start()
-
-    def _on_tracks_loaded(self, album_id: str, songs: list[dict]) -> None:
-        """Callback when tracks for an album have been fetched."""
-        # Cache them
-        self._track_cache[album_id] = songs
-
-        # If the album is still expanded, insert rows
-        if album_id in self._expanded_albums:
-            header_row = self._find_album_row(album_id)
-            if header_row is not None:
-                # Restore the track count display
-                song_count = len(songs)
-                header_item = QTableWidgetItem(f"{song_count} tracks")
-                header_item.setFlags(header_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                self._table.setItem(header_row, 3, header_item)
-
-                self._insert_album_tracks(album_id, header_row + 1)
-                self._shift_row_indices_after(header_row, song_count)
-
-    def _on_tracks_error(self, album_id: str, error: str) -> None:
-        """Callback when track loading fails for an album."""
-        self._expanded_albums.discard(album_id)
-        header_row = self._find_album_row(album_id)
-        if header_row is not None:
-            err_item = QTableWidgetItem("error")
-            err_item.setFlags(err_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self._table.setItem(header_row, 3, err_item)
-        logger.error("Failed to load tracks for album %s: %s", album_id, error)
-
-    def _collapse_album(self, album_id: str) -> None:
-        """Collapse an album by removing its track rows."""
-        self._remove_album_tracks(album_id)
-
-    def _find_album_row(self, album_id: str) -> int | None:
-        """Find the table row for an album header given its ID."""
-        for row, idx in self._album_rows.items():
-            if idx < len(self._albums) and self._albums[idx]["id"] == album_id:
-                return row
-        return None
-
-    def _apply_search_filter(self) -> None:
+    def _collapse_all(self) -> None:
+        self._expanded_artists.clear()
+        self._expanded_albums.clear()
         self._build_table_from_scratch()
 
     def _select_all(self) -> None:
-        """Select all tracks across all albums."""
         for album in self._albums:
             album_id = album["id"]
             for track in self._track_cache.get(album_id, []):
@@ -563,20 +631,14 @@ class NavidromeBrowseDialog(QDialog):
                 if sid:
                     self._selected_ids.add(sid)
         self._build_table_from_scratch()
-        self._update_selection_label()
 
     def _deselect_all(self) -> None:
-        """Deselect all tracks."""
         self._selected_ids.clear()
         self._build_table_from_scratch()
-        self._update_selection_label()
 
-    def _update_selection_label(self) -> None:
-        count = len(self._selected_ids)
-        self._selection_label.setText(f"{count} track{'s' if count != 1 else ''} selected")
+    # ---- Persistence ----
 
     def _save_and_accept(self) -> None:
-        """Save selected IDs to settings and close dialog."""
         try:
             s = self._settings_service.get_global_settings()
             s.navidrome_selected_ids = json.dumps(list(self._selected_ids))
