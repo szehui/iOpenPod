@@ -277,6 +277,7 @@ class NavidromeBrowseDialog(QDialog):
         )
         self._build_artist_groups()
         self._preselect_cached_tracks()
+        self._preload_saved_albums()
         self._loading_label.setVisible(False)
         self._table.setVisible(True)
         self._build_table_from_scratch()
@@ -312,6 +313,45 @@ class NavidromeBrowseDialog(QDialog):
             self._selected_ids.update(cached)
         except (OSError, PermissionError):
             logger.warning("Could not scan Navidrome cache dir", exc_info=True)
+
+    def _preload_saved_albums(self) -> None:
+        """Pre-load tracks for albums that had saved selections."""
+        s = self._settings_service.get_global_settings()
+        raw = getattr(s, "navidrome_selected_album_ids", "").strip()
+        if not raw:
+            return
+        try:
+            album_ids = json.loads(raw)
+            if not isinstance(album_ids, list) or not album_ids:
+                return
+        except Exception:
+            return
+
+        url = s.navidrome_url.strip()
+        username = s.navidrome_username.strip()
+        password = s.navidrome_password
+        if not url or not username or not password:
+            return
+
+        try:
+            from iopenpod.sync.navidrome_library import NavidromeClient
+            client = NavidromeClient(url, username, password)
+        except Exception:
+            logger.warning("Could not create Navidrome client for album pre-load", exc_info=True)
+            return
+
+        for album_id in album_ids:
+            if album_id in self._track_cache:
+                continue
+            try:
+                detail = client.get_album(album_id)
+                tracks = detail.get("song", [])
+                if isinstance(tracks, dict):
+                    tracks = [tracks]
+                self._track_cache[album_id] = tracks
+            except Exception:
+                logger.debug("Could not pre-load album %s", album_id, exc_info=True)
+        self._build_table_from_scratch()
 
     # ---- Table building ----
 
@@ -642,6 +682,15 @@ class NavidromeBrowseDialog(QDialog):
         try:
             s = self._settings_service.get_global_settings()
             s.navidrome_selected_ids = json.dumps(list(self._selected_ids))
+
+            # Save which albums have selected tracks so we can pre-load them
+            # on the next dialog open and show correct checkbox states
+            album_ids: set[str] = set()
+            for album_id, tracks in self._track_cache.items():
+                if any(t.get("id") in self._selected_ids for t in tracks if t.get("id")):
+                    album_ids.add(album_id)
+            s.navidrome_selected_album_ids = json.dumps(sorted(album_ids))
+
             self._settings_service.save_global_settings(s)
             self.accept()
         except Exception:

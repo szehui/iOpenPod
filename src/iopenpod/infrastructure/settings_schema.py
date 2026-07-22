@@ -282,6 +282,7 @@ class AppSettings:
     navidrome_password: str = ""
     navidrome_cache_dir: str = ""
     navidrome_selected_ids: str = ""  # JSON string of selected song IDs
+    navidrome_selected_album_ids: str = ""  # JSON string of selected album IDs
     navidrome_selected_playlist_ids: str = ""  # JSON string of selected playlist IDs
 
     backup_before_sync: bool = True
