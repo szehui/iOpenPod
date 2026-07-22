@@ -88,7 +88,7 @@ class NavidromePlaylistDialog(QDialog):
     def _init_ui(self) -> None:
         self.setWindowTitle("Select Navidrome Playlists")
         self.setMinimumSize(600, 400)
-        self.setStyleSheet(f"background: {Colors.BG}; color: {Colors.TEXT};")
+        self.setStyleSheet(f"background: {Colors.DIALOG_BG}; color: {Colors.TEXT_PRIMARY};")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -97,7 +97,7 @@ class NavidromePlaylistDialog(QDialog):
         # Title
         title = QLabel("Select playlists to sync to your iPod")
         title.setFont(QFont(FONT_FAMILY, Metrics.FONT_LG))
-        title.setStyleSheet(f"color: {Colors.TEXT}; font-weight: 600;")
+        title.setStyleSheet(f"color: {Colors.TEXT_PRIMARY}; font-weight: 600;")
         layout.addWidget(title)
 
         subtitle = QLabel(
@@ -246,7 +246,7 @@ class NavidromePlaylistDialog(QDialog):
 
     def _on_load_error(self, error_msg: str) -> None:
         self._loading_label.setText(f"Failed to load playlists: {error_msg}")
-        self._loading_label.setStyleSheet(f"color: {Colors.ERROR_TEXT}; padding: 40px;")
+        self._loading_label.setStyleSheet(f"color: {Colors.DANGER}; padding: 40px;")
 
     def _on_check_toggled(self, playlist_id: str, checked: bool) -> None:
         if checked:
