@@ -9,6 +9,7 @@ planner, executor, and database writer modules.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -86,12 +87,14 @@ class SyncEngine:
     def compute_plan(self, request: EngineRequest):
         """Compute a sync plan from a typed engine request."""
 
+        from iopenpod.infrastructure.settings_paths import default_data_dir
         from iopenpod.sync.fingerprint_diff_engine import FingerprintDiffEngine
         from iopenpod.sync.pc_library import PCLibrary
 
         context = EnginePlanContext.from_request(cast(Any, request))
         self._emit(request, EngineStage.SCAN, message="Scanning media folders")
-        pc_library = PCLibrary(context.pc_folders)
+        cache_dir = os.path.join(default_data_dir(), "pc-library-cache")
+        pc_library = PCLibrary(context.pc_folders, cache_dir=cache_dir)
         diff_engine = FingerprintDiffEngine(
             pc_library,
             context.ipod_path,

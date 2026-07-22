@@ -229,15 +229,17 @@ class _PCLibScanWorker(QThread):
             else:
                 self.progress.emit("navidrome_sync", 0, 0, "Skipping Navidrome sync (not configured)")
 
+            from iopenpod.infrastructure.settings_paths import default_data_dir
             from iopenpod.sync.pc_library import PCLibrary
             log.debug("PCLibScanWorker scanning folders: %s", self._folders)
-            lib = PCLibrary(self._folder_entries)
+            cache_dir = os.path.join(default_data_dir(), "pc-library-cache")
+            lib = PCLibrary(self._folder_entries, cache_dir=cache_dir)
 
             def _on_track_progress(current: int, total: int, filename: str) -> None:
                 self.progress.emit("scan_pc", current, total, filename)
 
             tracks = list(
-                lib.scan(
+                lib.scan_cached(
                     include_video=self._include_video,
                     progress_callback=_on_track_progress,
                     max_workers=self._max_workers,

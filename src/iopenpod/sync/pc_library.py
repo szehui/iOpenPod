@@ -511,6 +511,140 @@ class PCTrack:
         """Return a tuple for matching (artist, album, title, duration)."""
         return (self.artist.lower(), self.album.lower(), self.title.lower(), self.duration_ms)
 
+    def to_dict(self) -> dict:
+        """Serialize to a plain dict for caching."""
+        return {
+            "path": self.path,
+            "relative_path": self.relative_path,
+            "filename": self.filename,
+            "extension": self.extension,
+            "mtime": self.mtime,
+            "size": self.size,
+            "title": self.title,
+            "artist": self.artist,
+            "album": self.album,
+            "album_artist": self.album_artist,
+            "genre": self.genre,
+            "year": self.year,
+            "track_number": self.track_number,
+            "track_total": self.track_total,
+            "disc_number": self.disc_number,
+            "disc_total": self.disc_total,
+            "duration_ms": self.duration_ms,
+            "bitrate": self.bitrate,
+            "sample_rate": self.sample_rate,
+            "rating": self.rating,
+            "sort_artist": self.sort_artist,
+            "sort_name": self.sort_name,
+            "sort_album": self.sort_album,
+            "sort_album_artist": self.sort_album_artist,
+            "sort_composer": self.sort_composer,
+            "compilation": self.compilation,
+            "comment": self.comment,
+            "composer": self.composer,
+            "grouping": self.grouping,
+            "bpm": self.bpm,
+            "sound_check": self.sound_check,
+            "pregap": self.pregap,
+            "postgap": self.postgap,
+            "sample_count": self.sample_count,
+            "gapless_data": self.gapless_data,
+            "gapless_track_flag": self.gapless_track_flag,
+            "vbr": self.vbr,
+            "play_count": self.play_count,
+            "date_released": self.date_released,
+            "subtitle": self.subtitle,
+            "explicit_flag": self.explicit_flag,
+            "has_lyrics": self.has_lyrics,
+            "lyrics": self.lyrics,
+            "art_hash": self.art_hash,
+            "is_video": self.is_video,
+            "video_kind": self.video_kind,
+            "show_name": self.show_name,
+            "season_number": self.season_number,
+            "episode_number": self.episode_number,
+            "episode_id": self.episode_id,
+            "description": self.description,
+            "long_description": self.long_description,
+            "network_name": self.network_name,
+            "sort_show": self.sort_show,
+            "is_podcast": self.is_podcast,
+            "is_audiobook": self.is_audiobook,
+            "category": self.category,
+            "podcast_url": self.podcast_url,
+            "podcast_enclosure_url": self.podcast_enclosure_url,
+            "chapters": self.chapters,
+            "needs_transcoding": self.needs_transcoding,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "PCTrack":
+        """Reconstruct a PCTrack from a dict (as produced by to_dict)."""
+        track = object.__new__(cls)
+        # Set all fields from dict
+        track.path = d["path"]
+        track.relative_path = d["relative_path"]
+        track.filename = d["filename"]
+        track.extension = d["extension"]
+        track.mtime = d["mtime"]
+        track.size = d["size"]
+        track.title = d["title"]
+        track.artist = d["artist"]
+        track.album = d["album"]
+        track.album_artist = d.get("album_artist")
+        track.genre = d.get("genre")
+        track.year = d.get("year")
+        track.track_number = d.get("track_number")
+        track.track_total = d.get("track_total")
+        track.disc_number = d.get("disc_number")
+        track.disc_total = d.get("disc_total")
+        track.duration_ms = d["duration_ms"]
+        track.bitrate = d.get("bitrate")
+        track.sample_rate = d.get("sample_rate")
+        track.rating = d.get("rating")
+        track.sort_artist = d.get("sort_artist")
+        track.sort_name = d.get("sort_name")
+        track.sort_album = d.get("sort_album")
+        track.sort_album_artist = d.get("sort_album_artist")
+        track.sort_composer = d.get("sort_composer")
+        track.compilation = d.get("compilation", False)
+        track.comment = d.get("comment")
+        track.composer = d.get("composer")
+        track.grouping = d.get("grouping")
+        track.bpm = d.get("bpm")
+        track.sound_check = d.get("sound_check", 0)
+        track.pregap = d.get("pregap", 0)
+        track.postgap = d.get("postgap", 0)
+        track.sample_count = d.get("sample_count", 0)
+        track.gapless_data = d.get("gapless_data", 0)
+        track.gapless_track_flag = d.get("gapless_track_flag", 0)
+        track.vbr = d.get("vbr", False)
+        track.play_count = d.get("play_count", 0)
+        track.date_released = d.get("date_released", 0)
+        track.subtitle = d.get("subtitle")
+        track.explicit_flag = d.get("explicit_flag", 0)
+        track.has_lyrics = d.get("has_lyrics", False)
+        track.lyrics = d.get("lyrics")
+        track.art_hash = d.get("art_hash")
+        track.is_video = d.get("is_video", False)
+        track.video_kind = d.get("video_kind", "")
+        track.show_name = d.get("show_name")
+        track.season_number = d.get("season_number")
+        track.episode_number = d.get("episode_number")
+        track.episode_id = d.get("episode_id")
+        track.description = d.get("description")
+        track.long_description = d.get("long_description")
+        track.network_name = d.get("network_name")
+        track.sort_show = d.get("sort_show")
+        track.is_podcast = d.get("is_podcast", False)
+        track.is_audiobook = d.get("is_audiobook", False)
+        track.category = d.get("category")
+        track.podcast_url = d.get("podcast_url")
+        track.podcast_enclosure_url = d.get("podcast_enclosure_url")
+        track.chapters = d.get("chapters")
+        track.needs_transcoding = d.get("needs_transcoding", False)
+        return track
+
 
 LibraryRoot = str | os.PathLike[str] | dict[str, object] | MediaFolderEntry
 
@@ -607,10 +741,14 @@ class PCLibrary:
         tracks = list(library.scan(progress_callback=on_progress))
     """
 
-    def __init__(self, root_path: LibraryRoot | Iterable[LibraryRoot]):
+    def __init__(self, root_path: LibraryRoot | Iterable[LibraryRoot], *, cache_dir: str | None = None):
         self.root_entries = _coerce_root_entries(root_path)
         self.root_paths = tuple(Path(entry.directory) for entry in self.root_entries)
         self.root_path = self.root_paths[0]
+        self._cache: Any = None
+        if cache_dir:
+            from .pc_library_cache import PCLibraryCache
+            self._cache = PCLibraryCache(cache_dir)
 
     @staticmethod
     def _should_skip_library_file(filename: str) -> bool:
@@ -692,6 +830,131 @@ class PCLibrary:
                     continue
                 seen_files.add(key)
                 yield file_path, library_root
+
+    def scan_cached(
+        self,
+        progress_callback: Callable[[int, int, str], None] | None = None,
+        include_video: bool = True,
+        max_workers: int | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Iterator[PCTrack]:
+        """Scan the library, using the on-disk cache to skip unchanged files.
+
+        Files whose mtime+size match a cached entry are yielded from cache
+        without reading metadata. Changed/new files are read with ``scan()``
+        (which uses ThreadPoolExecutor for parallelism) and written to cache.
+        The cache is persisted after a successful scan.
+
+        Falls back to the full ``scan()`` if no cache is configured.
+        """
+        cache = self._cache
+        if cache is None:
+            yield from self.scan(
+                progress_callback=progress_callback,
+                include_video=include_video,
+                max_workers=max_workers,
+                is_cancelled=is_cancelled,
+            )
+            return
+
+        cache.load()
+
+        # Walk the filesystem (fast — just enumerate and stat)
+        files_on_disk: list[tuple[Path, Path, float, int]] = []  # (file_path, root_path, mtime, size)
+
+        for _root_path in self.root_paths:
+            for file_path, lib_root in self._scan_media_files(include_video=include_video):
+                try:
+                    st = file_path.stat()
+                    mtime = st.st_mtime
+                    size = st.st_size
+                except OSError:
+                    continue
+                files_on_disk.append((file_path, lib_root, mtime, size))
+
+        total = len(files_on_disk)
+        current = 0
+
+        # Track which files exist per root for cache cleanup
+        seen_files_by_root: dict[str, set[str]] = {}
+
+        # Collect files that need fresh metadata (cache miss)
+        fresh_file_info: list[tuple[Path, Path, str]] = []
+
+        for file_path, lib_root, mtime, size in files_on_disk:
+            if is_cancelled and is_cancelled():
+                return
+            current += 1
+
+            # Compute relative path under its root
+            try:
+                rel_path = str(file_path.relative_to(lib_root))
+            except ValueError:
+                rel_path = file_path.name
+            root_str = str(lib_root)
+            seen_files_by_root.setdefault(root_str, set()).add(rel_path)
+
+            # Check cache
+            cached = cache.get(lib_root, rel_path)
+            if cached is not None:
+                cached_mtime, cached_size, cached_dict = cached
+                if cached_mtime == mtime and cached_size == size:
+                    # Cache hit — skip tag read entirely
+                    track = PCTrack.from_dict(cached_dict)
+                    if track.path != str(file_path):
+                        track.path = str(file_path)
+                    if progress_callback:
+                        progress_callback(current, total, file_path.name)
+                    yield track
+                    continue
+
+            # Cache miss — will read via parallel scan()
+            fresh_file_info.append((file_path, lib_root, rel_path))
+
+        if is_cancelled and is_cancelled():
+            return
+
+        # If everything was a cache hit, we're done
+        if not fresh_file_info:
+            cache.prune_to(seen_files_by_root)
+            cache.save()
+            return
+
+        # Read fresh files in parallel via ThreadPoolExecutor
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        max_workers_val = max(1, min(max_workers or (os.cpu_count() or 4), 8))
+        workers = ThreadPoolExecutor(max_workers=max_workers_val)
+        fut_map = {}
+        try:
+            for file_path, lib_root, rel_path in fresh_file_info:
+                fut = workers.submit(self._read_track, file_path, library_root=lib_root)
+                fut_map[fut] = (file_path, lib_root, rel_path)
+            for fut in as_completed(fut_map):
+                if is_cancelled and is_cancelled():
+                    for pending in fut_map:
+                        pending.cancel()
+                    return
+                file_path, lib_root, rel_path = fut_map[fut]
+                try:
+                    track = fut.result()
+                except Exception as e:
+                    logging.warning("Failed to read %s: %s", file_path, e)
+                    track = None
+                current += 1
+                if progress_callback:
+                    progress_callback(current, current, file_path.name)
+                if track is not None:
+                    st = file_path.stat()
+                    cache.put(lib_root, rel_path, st.st_mtime, st.st_size, track.to_dict())
+                    yield track
+        finally:
+            cancel_futs = bool(is_cancelled and is_cancelled())
+            workers.shutdown(wait=False, cancel_futures=cancel_futs)
+
+        # Clean deleted files from cache and persist
+        cache.prune_to(seen_files_by_root)
+        cache.save()
 
     @staticmethod
     def _default_scan_workers() -> int:

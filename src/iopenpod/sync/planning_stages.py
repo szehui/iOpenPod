@@ -37,6 +37,15 @@ class SourceLibrary(Protocol):
     ) -> Iterable[Any]:
         ...
 
+    def scan_cached(
+        self,
+        progress_callback: Callable[[int, int, str], None] | None = None,
+        include_video: bool = True,
+        max_workers: int | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Iterable[Any]:
+        ...
+
     def _read_track(
         self,
         file_path: Path,
@@ -82,7 +91,7 @@ def scan_source_libraries(
             progress_callback("scan_pc", current, total, filename)
 
     pc_tracks = list(
-        pc_library.scan(
+        pc_library.scan_cached(
             progress_callback=_scan_progress,
             include_video=supports_video,
             max_workers=scan_workers,
