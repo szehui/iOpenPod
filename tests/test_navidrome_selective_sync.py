@@ -430,7 +430,7 @@ class TestNavidromeLibraryPlaylists:
              patch.object(lib, "get_all_cached_songs") as mock_cached, \
              patch.object(lib, "get_selected_playlist_song_ids") as mock_pl_songs, \
              patch.object(lib, "_generate_playlist_m3us") as mock_gen_m3u, \
-             patch.object(lib, "_download_file") as mock_dl:
+             patch.object(lib, "_download_file"):
 
             mock_pl_songs.return_value = {"s1"}
             mock_resolve.return_value = [{"id": "s1", "suffix": "mp3", "size": 100}]
@@ -449,7 +449,7 @@ class TestNavidromeLibraryPlaylists:
         with patch.object(lib, "_resolve_songs") as mock_resolve, \
              patch.object(lib, "get_all_cached_songs") as mock_cached, \
              patch.object(lib, "_generate_playlist_m3us") as mock_gen_m3u, \
-             patch.object(lib, "_download_file") as mock_dl:
+             patch.object(lib, "_download_file"):
 
             mock_resolve.return_value = [{"id": "s1", "suffix": "mp3", "size": 100}]
             mock_cached.return_value = []

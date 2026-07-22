@@ -29,7 +29,6 @@ from ..styles import (
     Metrics,
     accent_btn_css,
     btn_css,
-    input_css,
     table_css,
 )
 
@@ -255,11 +254,11 @@ class NavidromePlaylistDialog(QDialog):
             self._selected_ids.discard(playlist_id)
 
     def _select_all(self) -> None:
-        for pl_id, cb in self._checkboxes.items():
+        for _pl_id, cb in self._checkboxes.items():
             cb.setChecked(True)
 
     def _clear_all(self) -> None:
-        for pl_id, cb in self._checkboxes.items():
+        for _pl_id, cb in self._checkboxes.items():
             cb.setChecked(False)
 
     def _save(self) -> None:
