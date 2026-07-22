@@ -328,6 +328,7 @@ class SyncSessionController(QObject):
         navidrome_username = ""
         navidrome_password = ""
         navidrome_selected_ids: list[str] | None = None
+        navidrome_selected_playlist_ids: list[str] | None = None
         if any(_dir_matches(f, navidrome_cache) for f in pc_folders):
             nd_url = getattr(settings, "navidrome_url", "").strip()
             nd_user = getattr(settings, "navidrome_username", "").strip()
@@ -346,6 +347,16 @@ class SyncSessionController(QObject):
                             navidrome_selected_ids = parsed
                     except (json.JSONDecodeError, TypeError):
                         logger.warning("Could not parse navidrome_selected_ids; syncing all")
+
+                # Parse selected playlist IDs from settings
+                raw_pl_ids = getattr(settings, "navidrome_selected_playlist_ids", "").strip()
+                if raw_pl_ids:
+                    try:
+                        parsed = json.loads(raw_pl_ids)
+                        if isinstance(parsed, list) and parsed:
+                            navidrome_selected_playlist_ids = parsed
+                    except (json.JSONDecodeError, TypeError):
+                        logger.warning("Could not parse navidrome_selected_playlist_ids")
             else:
                 logger.warning(
                     "Navidrome cache in folder list but credentials missing — "
@@ -410,6 +421,7 @@ class SyncSessionController(QObject):
             navidrome_password=navidrome_password,
             navidrome_cache_dir=navidrome_cache,
             navidrome_selected_ids=navidrome_selected_ids,
+            navidrome_selected_playlist_ids=navidrome_selected_playlist_ids,
         )
 
     def _on_planning_finished(self, plan: Any, worker: Any) -> None:

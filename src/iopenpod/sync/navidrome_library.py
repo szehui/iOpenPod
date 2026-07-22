@@ -195,6 +195,23 @@ class NavidromeClient:
             song_list = [song_list]
         return song_list
 
+    def get_playlists(self) -> list[dict[str, Any]]:
+        """Return all playlists (flat list)."""
+        sr = self._get("getPlaylists")
+        playlist_container = sr.get("playlists", {})
+        if isinstance(playlist_container, dict):
+            playlists = playlist_container.get("playlist", [])
+        else:
+            playlists = playlist_container if isinstance(playlist_container, list) else []
+        if isinstance(playlists, dict):
+            playlists = [playlists]
+        return playlists
+
+    def get_playlist(self, playlist_id: str) -> dict[str, Any]:
+        """Return a single playlist with its track list."""
+        sr = self._get("getPlaylist", {"id": playlist_id})
+        return sr.get("playlist", {})
+
 
 class NavidromeLibrary:
     """Downloads a Navidrome library into a local cache directory.
@@ -259,21 +276,38 @@ class NavidromeLibrary:
         progress_callback=None,
         is_cancelled=None,
         song_ids: list[str] | None = None,
+        playlist_ids: list[str] | None = None,
     ) -> None:
         """Download tracks from Navidrome that aren't already cached.
 
         If *song_ids* is provided, only those tracks are downloaded.
+        If *playlist_ids* is provided, all tracks from those playlists are
+        also downloaded (merged with song_ids).
         Otherwise every track in the library is downloaded (existing behaviour).
         """
         os.makedirs(self.cache_dir, exist_ok=True)
-        songs = self._resolve_songs(song_ids)
+
+        # Merge song_ids with playlist song IDs
+        resolved_ids: list[str] | None = None
+        if playlist_ids:
+            pl_song_ids = self.get_selected_playlist_song_ids(playlist_ids)
+            if song_ids is not None:
+                # Merge: include both individually selected and playlist songs
+                resolved_ids = list(set(song_ids) | pl_song_ids)
+            else:
+                resolved_ids = list(pl_song_ids) if pl_song_ids else None
+        elif song_ids is not None:
+            resolved_ids = song_ids
+
+        songs = self._resolve_songs(resolved_ids)
         if not songs:
             logger.warning("NavidromeLibrary: no songs returned from API")
             return
 
         total = len(songs)
-        label = f"{total} selected track(s)" if song_ids else f"{total} song(s)"
-        logger.info("NavidromeLibrary: syncing %s to %s", label, self.cache_dir)
+        label = f"{total} selected track(s)" if resolved_ids else f"{total} song(s)"
+        logger.info("NavidromeLibrary: syncing %s to %s, playlist_ids=%s",
+                     label, self.cache_dir, playlist_ids)
         downloaded = skipped = failed = 0
 
         for _i, song in enumerate(songs):
@@ -324,6 +358,41 @@ class NavidromeLibrary:
             failed,
         )
 
+        # Generate M3U playlist files for selected playlists
+        if playlist_ids:
+            self._generate_playlist_m3us(playlist_ids)
+
+    # ── Playlist support ─────────────────────────────────────────────────────
+
+    def _generate_playlist_m3us(self, playlist_ids: list[str]) -> None:
+        """Generate M3U8 playlist files in the cache dir for each selected playlist."""
+        playlists = self.get_selected_playlists_with_tracks(playlist_ids)
+        for pl in playlists:
+            name = pl["name"]
+            song_ids = pl["song_ids"]
+            # Sanitize filename — replace chars that are problematic on FAT32/exFAT
+            safe_name = "".join(c if c.isalnum() or c in " _-." else "_" for c in name).strip()
+            if not safe_name:
+                safe_name = "Untitled"
+            m3u_path = os.path.join(self.cache_dir, f"{safe_name}.m3u8")
+
+            lines = ["#EXTM3U\n"]
+            for sid in song_ids:
+                # Find the cached file for this song ID
+                for fname in os.listdir(self.cache_dir):
+                    if fname.startswith(sid + ".") or fname == sid:
+                        abspath = os.path.join(self.cache_dir, fname)
+                        if os.path.isfile(abspath):
+                            lines.append(f"{abspath}\n")
+                            break
+
+            with open(m3u_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+            logger.info(
+                "Generated playlist M3U: %s (%d tracks, %d resolved)",
+                m3u_path, len(song_ids), len(lines) - 1,
+            )
+
     @staticmethod
     def _download_file(url: str, dest: str, expected_size: int) -> bool:
         """Stream *url* to *dest*. Returns True on success."""
@@ -344,3 +413,44 @@ class NavidromeLibrary:
             except OSError:
                 pass
             return False
+
+    # ── Playlist support ─────────────────────────────────────────────────────
+
+    def get_selected_playlists_with_tracks(
+        self,
+        selected_ids: list[str],
+    ) -> list[dict[str, Any]]:
+        """Fetch each selected playlist with its full track listing.
+
+        Returns a list of dicts::
+            {"name": str, "song_ids": list[str], "song_count": int}
+        """
+        result: list[dict[str, Any]] = []
+        for pl_id in selected_ids:
+            try:
+                pl_data = self.client.get_playlist(pl_id)
+                if not pl_data:
+                    continue
+                name = pl_data.get("name", "Unknown")
+                entries = pl_data.get("entry", [])
+                if isinstance(entries, dict):
+                    entries = [entries]
+                song_ids = [e.get("id", "") for e in entries if e.get("id")]
+                result.append({
+                    "name": name,
+                    "song_ids": song_ids,
+                    "song_count": len(song_ids),
+                })
+            except Exception:
+                logger.exception("Failed to fetch playlist %s", pl_id)
+        return result
+
+    def get_selected_playlist_song_ids(
+        self,
+        selected_ids: list[str],
+    ) -> set[str]:
+        """Return the set of all Navidrome song IDs that belong to selected playlists."""
+        all_ids: set[str] = set()
+        for pl in self.get_selected_playlists_with_tracks(selected_ids):
+            all_ids.update(pl["song_ids"])
+        return all_ids

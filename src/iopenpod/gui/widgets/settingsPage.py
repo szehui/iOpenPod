@@ -1999,6 +1999,11 @@ class SettingsPage(QWidget):
         self.browse_library_btn.setStyleSheet(button_css("secondary", "sm"))
         self.browse_library_btn.clicked.connect(self._on_browse_library_clicked)
 
+        self.select_playlists_btn = QPushButton("Select Playlists...")
+        self.select_playlists_btn.setFont(QFont(FONT_FAMILY, Metrics.FONT_SM))
+        self.select_playlists_btn.setStyleSheet(button_css("secondary", "sm"))
+        self.select_playlists_btn.clicked.connect(self._on_select_playlists_clicked)
+
         return self._make_page(
             "Navidrome",
             "Connection",
@@ -2010,6 +2015,7 @@ class SettingsPage(QWidget):
             _SettingsCard(
                 self.navidrome_cache_dir,
                 self.browse_library_btn,
+                self.select_playlists_btn,
             ),
         )
 
@@ -3611,3 +3617,10 @@ class SettingsPage(QWidget):
 
         dialog = NavidromeBrowseDialog(self._settings_service, self)
         dialog.exec()
+
+    def _on_select_playlists_clicked(self) -> None:
+        """Open the Navidrome playlist selection dialog."""
+        from iopenpod.gui.widgets.navidromePlaylistDialog import NavidromePlaylistDialog
+
+        dlg = NavidromePlaylistDialog(self._settings_service, self)
+        dlg.exec()

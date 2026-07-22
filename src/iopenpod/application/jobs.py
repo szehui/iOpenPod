@@ -1162,6 +1162,7 @@ class SyncDiffRequest:
     navidrome_password: str = ""
     navidrome_cache_dir: str = ""
     navidrome_selected_ids: list[str] | None = None
+    navidrome_selected_playlist_ids: list[str] | None = None
 
 
 class SyncDiffWorker(QThread):
@@ -1215,6 +1216,7 @@ class SyncDiffWorker(QThread):
                         progress_callback=navidrome_progress,
                         is_cancelled=lambda: self.isInterruptionRequested(),
                         song_ids=navidrome_selected,
+                        playlist_ids=getattr(request, "navidrome_selected_playlist_ids", None),
                     )
                     logger.info("Navidrome library synced to %s", navidrome_cache)
                 except Exception:
