@@ -34,6 +34,8 @@ def test_scan_source_libraries_expands_selected_playlist_tracks(tmp_path) -> Non
         ) -> Iterator[Any]:
             return iter([_track(main)])
 
+        scan_cached = scan
+
         def _read_track(
             self,
             file_path: Path,
@@ -75,6 +77,8 @@ def test_scan_source_libraries_filters_podcasts_when_unsupported(tmp_path) -> No
             is_cancelled: Callable[[], bool] | None = None,
         ) -> Iterator[Any]:
             return iter([_track(music), _track(podcast, is_podcast=True)])
+
+        scan_cached = scan
 
         def _read_track(
             self,

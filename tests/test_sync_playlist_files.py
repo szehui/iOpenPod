@@ -599,6 +599,8 @@ def test_full_sync_playlist_ipod_file_reference_uses_existing_fingerprint(
         def scan(self, **_kwargs):
             return []
 
+        scan_cached = scan
+
         def _read_track(self, file_path: Path, library_root: Path | None = None):
             assert Path(file_path) == ipod_track_path
             stat = ipod_track_path.stat()
@@ -738,6 +740,8 @@ def test_full_sync_playlist_external_reference_uses_existing_ipod_fingerprint(
 
         def scan(self, **_kwargs):
             return []
+
+        scan_cached = scan
 
         def _read_track(self, file_path: Path, library_root: Path | None = None):
             assert Path(file_path) == source_path

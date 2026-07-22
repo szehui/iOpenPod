@@ -148,7 +148,7 @@ def test_compute_plan_uses_normalized_plan_context(monkeypatch, tmp_path) -> Non
     captured: dict[str, Any] = {}
 
     class FakePCLibrary:
-        def __init__(self, roots):
+        def __init__(self, roots, **kwargs):
             captured["pc_roots"] = roots
 
     class FakeDiffEngine:
