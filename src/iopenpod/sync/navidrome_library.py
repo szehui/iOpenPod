@@ -304,6 +304,9 @@ class NavidromeLibrary:
             logger.warning("NavidromeLibrary: no songs returned from API")
             return
 
+        # Clean up cache: remove files that are not in the current selection
+        self._cleanup_cache(resolved_ids)
+
         total = len(songs)
         label = f"{total} selected track(s)" if resolved_ids else f"{total} song(s)"
         logger.info("NavidromeLibrary: syncing %s to %s, playlist_ids=%s",
@@ -413,6 +416,37 @@ class NavidromeLibrary:
             except OSError:
                 pass
             return False
+
+    def _cleanup_cache(self, song_ids: list[str] | None) -> None:
+        """Remove cached files that are not in the current selection.
+        
+        When doing a selective sync (song_ids not None), remove any cached
+        files that don't correspond to the selected song IDs to prevent
+        duplicate scanning in the PC library phase.
+        """
+        if song_ids is None:
+            # Full sync - keep everything in cache
+            return
+            
+        selected_set = set(song_ids)
+        try:
+            for filename in os.listdir(self.cache_dir):
+                filepath = os.path.join(self.cache_dir, filename)
+                if not os.path.isfile(filepath):
+                    continue
+                    
+                # Files are stored as {song_id}.{extension}. Use splitext
+                # to split on the last dot, which is always the extension,
+                # even for song IDs that contain dots themselves.
+                song_id, _ = os.path.splitext(filename)
+                if song_id not in selected_set:
+                    try:
+                        os.remove(filepath)
+                        logger.debug("Removed stale cache file: %s", filename)
+                    except OSError as e:
+                        logger.warning("Failed to remove cache file %s: %s", filename, e)
+        except OSError as e:
+            logger.warning("Failed to list cache directory %s: %s", self.cache_dir, e)
 
     # ── Playlist support ─────────────────────────────────────────────────────
 
