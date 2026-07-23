@@ -3774,7 +3774,7 @@ class PCFolderDialog(QDialog):
             # Ensure the cache dir exists for validation
             os.makedirs(self._navidrome_cache_dir, exist_ok=True)
             entry = {"directory": self._navidrome_cache_dir, "recurse": True,
-                     "media_types": ("music",)}
+                     "media_types": ("music", "playlists")}
             self._folders.append(entry)
         else:
             # Remove any entry matching the navidrome cache dir
