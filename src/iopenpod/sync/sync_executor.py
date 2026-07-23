@@ -1547,10 +1547,14 @@ class SyncExecutor:
             ctx.result.success = False
             return
 
-        # Scrobble before clearing transient play deltas or deleting Play
-        # Counts.  Each service receives its own snapshot of the original
-        # deltas, then the in-memory DB state is cleared once before write.
+        # Scrobble before clearing transient play deltas.
+        # The Play Counts file is deleted FIRST — the iPod firmware uses it
+        # as write-only storage for play/skip deltas, and we have already
+        # merged its data into the in-memory track objects during the DB read
+        # phase.  Deleting it early prevents duplicate scrobbles if the sync
+        # is interrupted after scrobbling but before the DB write completes.
         if ctx.plan.to_sync_playcount:
+            self._delete_playcounts_file()
             self._execute_scrobble(ctx)
             self._clear_playcount_deltas(ctx)
 
@@ -1640,7 +1644,6 @@ class SyncExecutor:
             )
 
             self._revalidate_device_write_readiness()
-            self._delete_playcounts_file()
 
         except DeviceWriteSafetyError as e:
             ctx.result.errors.append(("filesystem_safety", str(e)))
